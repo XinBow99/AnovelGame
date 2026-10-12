@@ -173,8 +173,13 @@ namespace DUST.EditorTools
         }
 
         static Material Lit(string name, Color c, float metallic, float smoothness, float coat = 0f, bool transparent = false)
+            => LitAt(MatDir, name, c, metallic, smoothness, coat, transparent);
+
+        // 其他載具（無人機）也用同一套 HDRP Lit 材質設定
+        internal static Material LitAt(string dir, string name, Color c, float metallic, float smoothness, float coat = 0f, bool transparent = false)
         {
-            var path = MatDir + "/" + name + ".mat";
+            Directory.CreateDirectory(dir);
+            var path = dir + "/" + name + ".mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (m == null)
             {

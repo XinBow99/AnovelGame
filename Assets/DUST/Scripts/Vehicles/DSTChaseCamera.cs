@@ -8,7 +8,7 @@ namespace DUST.Vehicles
     // 追車攝影機；C 鍵（手把 Y）切換駕駛座視角
     public class DSTChaseCamera : MonoBehaviour
     {
-        public DSTVehicleController target;
+        public Transform target;          // 上車時由 DSTVehicleEntry 指定（皮卡、無人機共用這台鏡頭）
         public Transform cockpitEye;
         public float distance = 6.5f;
         public float height = 2.2f;

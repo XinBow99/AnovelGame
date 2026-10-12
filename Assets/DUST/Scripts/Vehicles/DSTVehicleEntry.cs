@@ -8,7 +8,7 @@ namespace DUST.Vehicles
     // 連線：誰在開車由主機決定（一次一個駕駛），上車後車的物理交給駕駛那台電腦跑（Ownership 轉移）。
     public class DSTVehicleEntry : NetworkBehaviour
     {
-        public DSTVehicleController vehicle;
+        public MonoBehaviour vehicle;                  // 實作 IDSTDrivable 的元件（皮卡 / 無人機）；留空 → 自動找
         public DSTChaseCamera vehicleCamera;           // 留空 → 執行時在場景裡找
         public Transform[] exitPoints;                 // 依優先順序：駕駛側、乘客側、車尾
         public float maxExitSpeedKmh = 12f;
@@ -19,6 +19,7 @@ namespace DUST.Vehicles
         public bool HasDriver => _driver.Value != NoDriver;
         public bool CanEnter => !HasDriver && Time.time >= _requestPendingUntil;
         public bool IsLocalDriver => _localDriver != null;
+        public IDSTDrivable Drivable { get; private set; }
 
         DSTPlayerController _localDriver;
         float _requestPendingUntil;
@@ -28,7 +29,8 @@ namespace DUST.Vehicles
 
         void Awake()
         {
-            if (!vehicle) vehicle = GetComponent<DSTVehicleController>();
+            if (!vehicle) vehicle = GetComponent<IDSTDrivable>() as MonoBehaviour;
+            Drivable = vehicle as IDSTDrivable;
             if (!vehicleCamera) vehicleCamera = FindAnyObjectByType<DSTChaseCamera>(FindObjectsInactive.Include);
         }
 
@@ -74,11 +76,12 @@ namespace DUST.Vehicles
             if (me == null) return;
             _localDriver = me.Controller;
             me.SetInVehicle(true);
-            vehicle.playerControlled = true;
+            Drivable.PlayerControlled = true;
             if (vehicleCamera)
             {
-                vehicleCamera.target = vehicle;
-                if (!vehicleCamera.cockpitEye) vehicleCamera.cockpitEye = transform.Find("Seat_Driver_Eye");
+                // 鏡頭是所有載具共用的，每次上車都換成這台的目標與駕駛視角
+                vehicleCamera.target = transform;
+                vehicleCamera.cockpitEye = transform.Find("Seat_Driver_Eye");
                 vehicleCamera.gameObject.SetActive(true);
             }
             _enterTime = Time.time;
@@ -95,9 +98,9 @@ namespace DUST.Vehicles
         public bool TryExit()
         {
             if (_localDriver == null) return false;
-            if (Mathf.Abs(vehicle.SpeedKmh) > maxExitSpeedKmh)
+            if (!Drivable.CanExit(maxExitSpeedKmh, out var reason))
             {
-                Block("先減速才能下車");
+                Block(reason);
                 return false;
             }
             var cc = _localDriver.GetComponent<CharacterController>();
@@ -120,8 +123,7 @@ namespace DUST.Vehicles
         void LocalExit()
         {
             _localDriver = null;
-            vehicle.playerControlled = false;
-            vehicle.SetInput(0f, 0f, true);
+            Drivable.PlayerControlled = false;
             if (vehicleCamera) vehicleCamera.gameObject.SetActive(false);
             if (DSTNetPlayer.Local && DSTNetPlayer.Local.IsSpawned) DSTNetPlayer.Local.SetInVehicle(false);
         }
@@ -173,7 +175,7 @@ namespace DUST.Vehicles
         {
             if (_localDriver == null) return;
             if (Time.time < _blockedMessageUntil) DSTHud.CenterPrompt(_blockedMessage);
-            DSTHud.BottomHint("[F] 下車    [C] 切換視角    [Space] 手煞車");
+            DSTHud.BottomHint(Drivable.ControlsHint);
         }
     }
 }

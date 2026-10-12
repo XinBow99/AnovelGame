@@ -8,7 +8,7 @@ namespace DUST.Vehicles
     // 四輪載具控制：WheelCollider 物理 + 視覺同步。
     // 操作：W/S 油門與煞車（停住後按 S 倒車）、A/D 轉向、Space 手煞車、R 翻正。手把：RT/LT、左搖桿、A 鍵。
     [RequireComponent(typeof(Rigidbody))]
-    public class DSTVehicleController : MonoBehaviour
+    public class DSTVehicleController : MonoBehaviour, IDSTDrivable
     {
         [System.Serializable]
         public class Axle
@@ -59,6 +59,24 @@ namespace DUST.Vehicles
         public float Throttle { get; private set; }
         public float Steer { get; private set; }
         public bool Handbrake { get; private set; }
+
+        public bool PlayerControlled
+        {
+            get => playerControlled;
+            set
+            {
+                playerControlled = value;
+                if (!value) SetInput(0f, 0f, true);
+            }
+        }
+
+        public string ControlsHint => "[F] 下車    [C] 切換視角    [Space] 手煞車";
+
+        public bool CanExit(float maxExitSpeedKmh, out string reason)
+        {
+            reason = "先減速才能下車";
+            return Mathf.Abs(SpeedKmh) <= maxExitSpeedKmh;
+        }
 
         Rigidbody _rb;
         float _currentSteer;

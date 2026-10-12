@@ -7,13 +7,14 @@ using UnityEngine;
 namespace DUST.EditorTools
 {
     // 本地輸出 Windows 版並打包成 zip，給 GitHub Release 用。
-    // 輸出：Build/v{版本}/DUST/DUST.exe 與 Build/DUST-v{版本}-Windows.zip（Build/ 不進 git）
+    // 輸出：Build/v0_2_0/DUST/DUST.exe 與 Build/DUST_v0_2_0_Windows.zip（Build/ 不進 git）
+    // 檔名只用底線：「-」和版本號的「.」解壓縮 / 傳檔時在部分 Windows 環境會出問題
     public static class DSTBuild
     {
         const string MainScene = "Assets/DUST/DR2_Map/DR2_DesertRuins02.unity";
 
-        public static string Version => "v" + PlayerSettings.bundleVersion;
-        public static string ZipPath => $"Build/DUST-{Version}-Windows.zip";
+        public static string Version => "v" + PlayerSettings.bundleVersion.Replace('.', '_').Replace('-', '_');
+        public static string ZipPath => $"Build/DUST_{Version}_Windows.zip";
         public static string ResultPath => $"Build/{Version}/build_result.txt";
 
         [MenuItem("DUST/Build/Windows Release")]

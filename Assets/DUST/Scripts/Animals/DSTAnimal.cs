@@ -326,7 +326,7 @@ namespace DUST.Animals
             }
             foreach (var v in Object.FindObjectsByType<DSTVehicleEntry>())
                 if (v.HasDriver)
-                    _cache.Add((v.transform, Mathf.Abs(v.vehicle.SpeedKmh) > 3f ? ThreatKind.MovingVehicle : ThreatKind.IdleVehicle));
+                    _cache.Add((v.transform, Mathf.Abs(v.Drivable.SpeedKmh) > 3f ? ThreatKind.MovingVehicle : ThreatKind.IdleVehicle));
         }
 
         public static Transform Nearest(Vector3 from, out float distance, out ThreatKind kind)

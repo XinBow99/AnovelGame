@@ -12,7 +12,7 @@ using UnityEngine;
 namespace DUST.EditorTools
 {
     // 把玩家、車輛、動物 Prefab 和目前開著的場景設定成可連線。可以重複執行。
-    // 注意：重新跑 DSTPlayerSetup / DSTVehicleSetup / DSTAnimalSetup 重建 Prefab 之後，要再跑一次這個。
+    // 注意：重新跑 DSTPlayerSetup / DSTVehicleSetup / DSTDroneSetup / DSTAnimalSetup 重建 Prefab 之後，要再跑一次這個。
     public static class DSTNetSetup
     {
         const string NetDir = "Assets/DUST/Net";
@@ -25,6 +25,8 @@ namespace DUST.EditorTools
             System.IO.Directory.CreateDirectory(NetDir);
             var player = SetupPlayerPrefab();
             SetupVehiclePrefab(DSTVehicleSetup.PrefabPath);
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(DSTDroneSetup.PrefabPath))
+                SetupVehiclePrefab(DSTDroneSetup.PrefabPath);
             var spawner = Object.FindAnyObjectByType<DSTAnimalSpawner>();
             var animals = spawner ? spawner.species.Where(s => s && s.prefab).Select(s => s.prefab).Distinct().ToArray() : new GameObject[0];
             foreach (var a in animals) SetupAnimalPrefab(AssetDatabase.GetAssetPath(a));
