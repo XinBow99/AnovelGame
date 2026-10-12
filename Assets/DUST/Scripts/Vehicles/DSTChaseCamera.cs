@@ -18,6 +18,15 @@ namespace DUST.Vehicles
         public bool cockpit;
 
         float _yaw;
+        float _defaultDistance = -1f, _defaultHeight;
+
+        // 每台載具可以有自己的追車距離；0 = 用預設
+        public void SetFraming(float dist, float h)
+        {
+            if (_defaultDistance < 0f) { _defaultDistance = distance; _defaultHeight = height; }
+            distance = dist > 0f ? dist : _defaultDistance;
+            height = h > 0f ? h : _defaultHeight;
+        }
 
         // 每次啟用（上車）都直接放到車後方，不要從上次的位置慢慢飛過來
         void OnEnable()

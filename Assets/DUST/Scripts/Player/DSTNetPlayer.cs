@@ -50,20 +50,38 @@ namespace DUST.Player
             _cc = GetComponent<CharacterController>();
             if (_pc.head)
             {
-                _cam = _pc.head.GetComponent<Camera>();
-                _listener = _pc.head.GetComponent<AudioListener>();
+                _cam = _pc.head.GetComponentInChildren<Camera>(true);
+                _listener = _pc.head.GetComponentInChildren<AudioListener>(true);
             }
             _remoteHeight = _pc.standHeight;
+        }
+
+        // 領巾顏色：每個玩家不一樣，一眼認得出誰是誰
+        static readonly Color[] ScarfColors =
+        {
+            new Color(0.62f, 0.06f, 0.05f), new Color(0.06f, 0.30f, 0.62f), new Color(0.10f, 0.45f, 0.18f), new Color(0.85f, 0.62f, 0.05f),
+            new Color(0.45f, 0.12f, 0.55f), new Color(0.05f, 0.50f, 0.50f), new Color(0.90f, 0.40f, 0.65f), new Color(0.15f, 0.15f, 0.15f),
+        };
+
+        void TintScarf()
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                if (!r.name.Contains("Scarf")) continue;
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                mpb.SetColor("_BaseColor", ScarfColors[(int)(OwnerClientId % (ulong)ScarfColors.Length)]);
+                r.SetPropertyBlock(mpb);
+            }
         }
 
         public override void OnNetworkSpawn()
         {
             All.Add(this);
+            TintScarf();
             if (IsOwner)
             {
                 Local = this;
-                foreach (var r in body)
-                    if (r) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
                 DSTNetSession.SetLobbyCamera(false);
                 _needsPlacement = true;
                 TryPlace();
@@ -130,21 +148,51 @@ namespace DUST.Player
 
         void OnInVehicleChanged(bool _, bool inside) => Apply(inside);
 
-        // 上車時身體、碰撞都收起來（不用 SetActive，NetworkObject 不能被關掉）
+        // 上車時碰撞收起來、不吃走路輸入（身體不藏：鬃狼模型會掛到車上播騎乘動作）
         void Apply(bool inVehicle)
         {
-            foreach (var r in body)
-                if (r) r.enabled = !inVehicle;
             if (_cc) _cc.enabled = !inVehicle;
-            if (IsOwner) SetLocalControl(!inVehicle);
+            if (IsOwner)
+            {
+                UpdateLocalControl();
+                // 不在車上時一定用自己的鏡頭；在車上時由上下車動作 / 追車鏡頭決定
+                if (!inVehicle) SetViewCamera(true);
+            }
+        }
+
+        bool _scripted;
+
+        void UpdateLocalControl()
+        {
+            bool on = !_inVehicle.Value && !_scripted;
+            _pc.enabled = on;
+            if (_interactor) _interactor.enabled = on;
         }
 
         void SetLocalControl(bool on)
         {
             _pc.enabled = on;
             if (_interactor) _interactor.enabled = on;
+            SetViewCamera(on);
+        }
+
+        /// <summary>自己角色的鏡頭（開車時改用追車鏡頭）</summary>
+        public void SetViewCamera(bool on)
+        {
+            if (!IsOwner) return;
             if (_cam) _cam.enabled = on;
             if (_listener) _listener.enabled = on;
+        }
+
+        /// <summary>腳本控制角色（上車前自己走過去）：不吃玩家輸入</summary>
+        public void BeginScripted() { _scripted = true; if (IsOwner) UpdateLocalControl(); }
+        public void EndScripted() { _scripted = false; if (IsOwner) UpdateLocalControl(); }
+
+        /// <summary>開車時，看不到的角色本體跟著車走（動物生成、地圖、連線距離都用角色位置）</summary>
+        public void FollowVehicle(Transform anchor)
+        {
+            if (!IsOwner || _cc && _cc.enabled) return;
+            transform.SetPositionAndRotation(anchor.position, Quaternion.Euler(0f, anchor.eulerAngles.y, 0f));
         }
 
         void Update()
@@ -159,21 +207,14 @@ namespace DUST.Player
                 return;
             }
 
-            // 別人的角色：頭的仰角、蹲下高度
+            // 別人的角色：頭的仰角、蹲下高度（碰撞用；外觀由鬃狼模型負責）
             if (_pc.head) _pc.head.localRotation = Quaternion.Euler(_pitch.Value, 0f, 0f);
             float target = _crouching.Value ? _pc.crouchHeight : _pc.standHeight;
             _remoteHeight = Mathf.MoveTowards(_remoteHeight, target, 6f * Time.deltaTime);
-            if (_cc)
+            if (_cc && _cc.enabled)
             {
                 _cc.height = _remoteHeight;
                 _cc.center = Vector3.up * (_remoteHeight * 0.5f);
-            }
-            if (_pc.head) _pc.head.localPosition = Vector3.up * (_remoteHeight - _pc.eyeBelowTop);
-            if (body.Length > 0 && body[0])
-            {
-                var s = body[0].transform.localScale;
-                body[0].transform.localScale = new Vector3(s.x, _remoteHeight * 0.5f, s.z);
-                body[0].transform.localPosition = Vector3.up * (_remoteHeight * 0.5f);
             }
         }
 

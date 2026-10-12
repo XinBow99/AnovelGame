@@ -12,5 +12,7 @@ namespace DUST.Vehicles
         // 下車條件：皮卡要減速，無人機還要降落
         bool CanExit(float maxExitSpeedKmh, out string reason);
         string ControlsHint { get; }
+        // 站在旁邊時的提示（上車 / 上機 / 租借）
+        string EnterHint { get; }
     }
 }

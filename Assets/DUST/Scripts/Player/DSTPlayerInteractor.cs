@@ -99,7 +99,7 @@ namespace DUST.Player
             // 沒對準也可以：貼在車旁時
             DSTVehicleEntry best = null;
             float bestD = proximity;
-            foreach (var c in Physics.OverlapSphere(transform.position + Vector3.up * 0.9f, proximity, ~0, QueryTriggerInteraction.Ignore))
+            foreach (var c in Physics.OverlapSphere(transform.position + Vector3.up * 0.3f, proximity, ~0, QueryTriggerInteraction.Ignore))
             {
                 var e = c.GetComponentInParent<DSTVehicleEntry>();
                 if (e == null || !e.CanEnter) continue;
@@ -113,7 +113,7 @@ namespace DUST.Player
         {
             DSTHud.Crosshair(Time.time < _hitMarkerUntil);
             if (_target == null) return;
-            DSTHud.CenterPrompt("[F] 上車");
+            DSTHud.CenterPrompt(_target.Drivable != null ? _target.Drivable.EnterHint : "[F] 上車");
         }
     }
 
@@ -146,6 +146,21 @@ namespace DUST.Player
 
         public static void CenterPrompt(string text) => Draw(new Rect(0, Screen.height * 0.5f + 40, Screen.width, 40), text);
         public static void BottomHint(string text) => Draw(new Rect(0, Screen.height - 60, Screen.width, 40), text);
+
+        // 上方中央的資訊條（深色底），例如 MeBike 的騎乘時間與費用
+        public static void TopPanel(string text)
+        {
+            var s = Style();
+            float w = s.CalcSize(new GUIContent(text)).x + 40f;
+            var r = new Rect((Screen.width - w) * 0.5f, 54, w, 38);
+            var c = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.5f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = new Color(0.98f, 0.62f, 0.08f, 1f);
+            GUI.DrawTexture(new Rect(r.x, r.yMax - 3, r.width, 3), Texture2D.whiteTexture);
+            GUI.color = c;
+            Draw(r, text);
+        }
 
         static void Draw(Rect r, string text)
         {

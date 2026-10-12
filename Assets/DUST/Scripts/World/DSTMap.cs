@@ -348,6 +348,17 @@ namespace DUST.World
                 if (local.Contains(sp)) { Icon(_dot, sp, 10, Color.white); if (!small) Shadowed(new Rect(sp.x - 60, sp.y + 6, 120, 22), "出生點", _small); }
             }
 
+            // MeBike 站
+            foreach (var st in DSTMeBikeStation.All)
+            {
+                if (!st) continue;
+                var p = WorldToScreen(local, center, mpp, new Vector2(st.transform.position.x, st.transform.position.z));
+                if (!local.Contains(p)) continue;
+                Icon(_dot, p, small ? 12 : 16, new Color(0.1f, 0.1f, 0.1f));
+                Icon(_dot, p, small ? 8 : 11, new Color(1f, 0.55f, 0.1f));
+                if (!small) Shadowed(new Rect(p.x - 80, p.y + 8, 160, 22), st.stationName, _small);
+            }
+
             // 載具
             foreach (var v in DSTVehicleEntry.All)
             {
@@ -355,7 +366,8 @@ namespace DUST.World
                 var p = WorldToScreen(local, center, mpp, new Vector2(v.transform.position.x, v.transform.position.z));
                 if (!local.Contains(p)) continue;
                 Icon(_square, p, small ? 8 : 11, new Color(0.15f, 0.15f, 0.15f));
-                Icon(_square, p, small ? 5 : 7, v.Drivable is DSTDroneController ? new Color(0.55f, 0.8f, 1f) : new Color(0.95f, 0.8f, 0.3f));
+                Color vc = v.Drivable is DSTDroneController ? new Color(0.55f, 0.8f, 1f) : v.Drivable is DSTBikeController ? new Color(1f, 0.55f, 0.1f) : new Color(0.95f, 0.8f, 0.3f);
+                Icon(_square, p, small ? 5 : 7, vc);
             }
 
             // 其他玩家

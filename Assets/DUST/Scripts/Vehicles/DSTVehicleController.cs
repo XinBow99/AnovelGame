@@ -59,6 +59,8 @@ namespace DUST.Vehicles
         public float Throttle { get; private set; }
         public float Steer { get; private set; }
         public bool Handbrake { get; private set; }
+        /// <summary>方向盤目前轉了幾度（正 = 右轉），給騎乘動作的前腳跟著轉</summary>
+        public float SteeringWheelAngle => _currentSteer * steeringWheelRatio;
 
         public bool PlayerControlled
         {
@@ -71,6 +73,7 @@ namespace DUST.Vehicles
         }
 
         public string ControlsHint => "[F] 下車    [C] 切換視角    [Space] 手煞車";
+        public string EnterHint => "[F] 上車";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)
         {

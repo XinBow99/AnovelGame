@@ -60,7 +60,7 @@ Transform:
   m_GameObject: {fileID: 1638081781717719682}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -1.5261389}
+  m_LocalPosition: {x: 0, y: 0, z: -1.4911389}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -92,7 +92,7 @@ Transform:
   m_GameObject: {fileID: 2588068975611528959}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.39, y: 0.22824109, z: -0.7}
+  m_LocalPosition: {x: -0.39, y: 0.22824103, z: -0.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -163,7 +163,7 @@ Transform:
   m_GameObject: {fileID: 3508335063963527870}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.39, y: 0.22824109, z: -0.7}
+  m_LocalPosition: {x: 0.39, y: 0.22824103, z: -0.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -234,7 +234,7 @@ Transform:
   m_GameObject: {fileID: 3510909389778078957}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.39, y: 0.22824109, z: 0.7}
+  m_LocalPosition: {x: 0.39, y: 0.22824115, z: 0.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -305,7 +305,7 @@ Transform:
   m_GameObject: {fileID: 4777701118347964065}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.39, y: 0.22824109, z: 0.7}
+  m_LocalPosition: {x: -0.39, y: 0.22824115, z: 0.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -375,7 +375,7 @@ Transform:
   m_GameObject: {fileID: 6299512256590566763}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.84749997, y: 0, z: 0.051930536}
+  m_LocalPosition: {x: 0.8125, y: 0, z: 0.051930536}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -406,7 +406,7 @@ Transform:
   m_GameObject: {fileID: 6641281808425254286}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.84749997, y: 0, z: 0.051930536}
+  m_LocalPosition: {x: -0.8125, y: 0, z: 0.051930536}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -472,6 +472,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 0.275
       objectReference: {fileID: 0}
+    - target: {fileID: 8659061036160934751, guid: a7644024419b94145a551d8c61156571, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.075
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: -6786094246806695902, guid: a7644024419b94145a551d8c61156571, type: 3}
     m_RemovedGameObjects:
@@ -501,16 +505,16 @@ PrefabInstance:
       addedObject: {fileID: 8848024275275757356}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a7644024419b94145a551d8c61156571, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4600513897777794743}
+      addedObject: {fileID: 8742208284140061814}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a7644024419b94145a551d8c61156571, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 6094937794599670022}
+      addedObject: {fileID: 2650480311348752057}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a7644024419b94145a551d8c61156571, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4821861739575976424}
+      addedObject: {fileID: 7097178161374277312}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a7644024419b94145a551d8c61156571, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 249285057094170204}
+      addedObject: {fileID: 1683856989405124982}
     - targetCorrespondingSourceObject: {fileID: -2891777476901477715, guid: a7644024419b94145a551d8c61156571, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4571685650336558420}
@@ -570,6 +574,11 @@ Transform:
 --- !u!4 &3790585199196382347 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -3245189568780204217, guid: a7644024419b94145a551d8c61156571, type: 3}
+  m_PrefabInstance: {fileID: 7380300690703885260}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &6295145765933339774 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -5678825993448753230, guid: a7644024419b94145a551d8c61156571, type: 3}
   m_PrefabInstance: {fileID: 7380300690703885260}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &7054503013628822567 stripped
@@ -676,7 +685,28 @@ MonoBehaviour:
   - {fileID: 2885490949969565618}
   - {fileID: 7655800203675967627}
   maxExitSpeedKmh: 12
---- !u!114 &4600513897777794743
+  chaseDistance: 0
+  chaseHeight: 0
+--- !u!114 &8742208284140061814
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7686925147385929373}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb2c4437df7e5774286126f4fbbec85f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTRideActions
+  ShowTopMostFoldoutHeaderGroup: 1
+  library: {fileID: 11400000, guid: 71a976315a0413447ab2e052f8e95fe3, type: 2}
+  kind: 0
+  anchor: {fileID: 7054503013628822567}
+  door: {fileID: 6295145765933339774}
+  doorAxis: {x: 0, y: 1, z: 0}
+  doorSign: 1
+--- !u!114 &2650480311348752057
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -703,7 +733,7 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
---- !u!114 &6094937794599670022
+--- !u!114 &7097178161374277312
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -749,7 +779,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &4821861739575976424
+--- !u!114 &1683856989405124982
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -766,18 +796,3 @@ MonoBehaviour:
   UseRigidBodyForMotion: 0
   AutoUpdateKinematicState: 1
   AutoSetKinematicOnDespawn: 1
---- !u!114 &249285057094170204
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7686925147385929373}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c5b95ab8f8fb80545bc5d529a0a278f4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTPhysicsClaimer
-  baseRadius: 1.5
-  lookAheadSeconds: 0.4
-  interval: 0.1

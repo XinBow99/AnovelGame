@@ -23,6 +23,7 @@ namespace DUST.World
         public Volume fogVolume;                  // 隨機世界把霧拉近，遮住還沒載入的遠方
         public float randomFogMeanFreePath = 300f;
         public float horizonHeight = -9f;           // 比地形最低處再低一點
+        public GameObject meBikeStation;           // 營地旁的 MeBike 站（DUST/Vehicles/Setup MeBike 會填）
 
         [Header("Streaming")]
         public int viewRings = 6;                 // 6 圈 × 64 m ≈ 400 m
@@ -149,6 +150,19 @@ namespace DUST.World
             _root = new GameObject("RandomWorld").transform;
             _horizon = CreateHorizon(_root);
 
+            // 營地旁的 MeBike 站（主機會在每根車柱生成一台）
+            if (meBikeStation)
+            {
+                var st = Instantiate(meBikeStation, _root);
+                float sx = 8f, sz = -1f;
+                st.transform.SetPositionAndRotation(new Vector3(sx, Gen.Height(sx, sz), sz), Quaternion.Euler(0f, 90f, 0f));
+                foreach (Transform part in st.transform)
+                {
+                    var p = part.position;
+                    part.position = new Vector3(p.x, Gen.Height(p.x, p.z), p.z);
+                }
+            }
+
             // 出生點附近先同步生成（含碰撞），玩家和車子一放下去就有地面
             for (int x = -1; x <= 1; x++)
             for (int z = -1; z <= 1; z++)
@@ -238,6 +252,7 @@ namespace DUST.World
             int i = 0;
             foreach (var v in FindObjectsByType<DSTVehicleEntry>())
             {
+                if (v.Drivable is DSTBikeController) continue;   // MeBike 由站點自己管
                 float x = -3f + 4.5f * i++, z = 9f;
                 Place(v.transform, new Vector3(x, Gen.Height(x, z) + 0.15f, z), Quaternion.Euler(0f, 0f, 0f));
             }
@@ -425,9 +440,6 @@ namespace DUST.World
         float _candidateSince;
         float _nextRegionCheck;
         string _notice, _noticeSub;
-        float _noticeAt = -100f;
-        GUIStyle _noticeStyle, _noticeSubStyle;
-        const float NoticeSeconds = 5f;
 
         void UpdateRegionNotice()
         {
@@ -448,34 +460,7 @@ namespace DUST.World
                 case DSTWorldGen.RegionKind.Ruins: _noticeSub = "你發現了"; break;
                 default: _noticeSub = "你來到了"; break;
             }
-            _noticeAt = Time.time;
-        }
-
-        void OnGUI()
-        {
-            if (!_active || DSTNetPlayer.Local == null || _notice == null) return;
-            float age = Time.time - _noticeAt;
-            if (age > NoticeSeconds) return;
-            if (_noticeStyle == null)
-            {
-                _noticeStyle = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-                _noticeSubStyle = new GUIStyle(_noticeStyle) { fontSize = 16, fontStyle = FontStyle.Normal };
-            }
-            // 從左邊滑進來，最後一秒淡出
-            float a = Mathf.Clamp01(age / 0.3f) * Mathf.Clamp01((NoticeSeconds - age) / 1f);
-            float slide = (1f - Mathf.Clamp01(age / 0.3f)) * -40f;
-            float w = Mathf.Max(260f, _noticeStyle.CalcSize(new GUIContent(_notice)).x + 48f);
-            var box = new Rect(24 + slide, Screen.height - 150, w, 70);
-            var old = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.55f * a);
-            GUI.DrawTexture(box, Texture2D.whiteTexture);
-            GUI.color = new Color(0.95f, 0.72f, 0.38f, a);
-            GUI.DrawTexture(new Rect(box.x, box.y, 4, box.height), Texture2D.whiteTexture);
-            GUI.color = old;
-            _noticeSubStyle.normal.textColor = new Color(0.9f, 0.86f, 0.78f, a);
-            GUI.Label(new Rect(box.x + 18, box.y + 6, box.width, 22), _noticeSub, _noticeSubStyle);
-            _noticeStyle.normal.textColor = new Color(1f, 0.93f, 0.78f, a);
-            GUI.Label(new Rect(box.x + 18, box.y + 28, box.width, 36), _notice, _noticeStyle);
+            DSTNotice.Show(_noticeSub, _notice);
         }
 
         bool Below(Vector3 p, float margin, out Vector3 ground)

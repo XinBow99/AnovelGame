@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 
 namespace DUST.Player
 {
-    // 第一人稱移動：WASD 移動、Shift 跑、Space 跳、Ctrl 蹲、滑鼠視角。手把：左搖桿移動、右搖桿視角、A 跳、B 蹲、L3 跑。
+    // 鬃狼的移動：WASD 移動、Shift 跑、Space 跳、Ctrl 蹲、滑鼠視角（C 切換第一 / 第三人稱）。手把：左搖桿移動、右搖桿視角、A 跳、B 蹲、L3 跑。
     // Esc 放開滑鼠游標，點一下畫面再鎖回來。
     [RequireComponent(typeof(CharacterController))]
     public class DSTPlayerController : MonoBehaviour
@@ -31,6 +31,7 @@ namespace DUST.Player
         public float standHeight = 1.8f;
         public float crouchHeight = 1.15f;
         public float eyeBelowTop = 0.12f;
+        public float headForward = 0f;           // 四足：眼睛在身體中心前方
 
         public bool IsGrounded => _cc && _cc.isGrounded;
         public bool IsCrouching => _crouching;
@@ -67,7 +68,7 @@ namespace DUST.Player
                 if (kb.aKey.isPressed) move.x -= 1;
                 sprint = kb.leftShiftKey.isPressed;
                 jump = kb.spaceKey.wasPressedThisFrame;
-                crouchHeld = kb.leftCtrlKey.isPressed || kb.cKey.isPressed;
+                crouchHeld = kb.leftCtrlKey.isPressed;   // C 是切換第一 / 第三人稱（DSTPlayerView）
             }
             if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
                 look += mouse.delta.ReadValue() * mouseSensitivity;
@@ -139,7 +140,7 @@ namespace DUST.Player
             _currentHeight = Mathf.MoveTowards(_currentHeight, target, 6f * dt);
             _cc.height = _currentHeight;
             _cc.center = Vector3.up * (_currentHeight * 0.5f);
-            if (head) head.localPosition = Vector3.up * (_currentHeight - eyeBelowTop);
+            if (head) head.localPosition = new Vector3(0f, _currentHeight - eyeBelowTop, headForward);
         }
 
         bool HitsOnlySelf(Vector3 a, Vector3 b, float r)

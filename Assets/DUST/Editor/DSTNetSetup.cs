@@ -27,11 +27,14 @@ namespace DUST.EditorTools
             SetupVehiclePrefab(DSTVehicleSetup.PrefabPath);
             if (AssetDatabase.LoadAssetAtPath<GameObject>(DSTDroneSetup.PrefabPath))
                 SetupVehiclePrefab(DSTDroneSetup.PrefabPath);
+            // MeBike 是執行期由站點生成的，要註冊成連線 Prefab
+            var meBike = AssetDatabase.LoadAssetAtPath<GameObject>(DSTMeBikeSetup.PrefabPath);
+            if (meBike) SetupVehiclePrefab(DSTMeBikeSetup.PrefabPath);
             var spawner = Object.FindAnyObjectByType<DSTAnimalSpawner>();
             var animals = spawner ? spawner.species.Where(s => s && s.prefab).Select(s => s.prefab).Distinct().ToArray() : new GameObject[0];
             foreach (var a in animals) SetupAnimalPrefab(AssetDatabase.GetAssetPath(a));
             var nm = SetupScene(player);
-            RegisterPrefabs(nm, animals);
+            RegisterPrefabs(nm, meBike ? animals.Concat(new[] { meBike }).ToArray() : animals);
             EditorSceneManager.MarkSceneDirty(nm.gameObject.scene);
             EditorSceneManager.SaveScene(nm.gameObject.scene);
             AssetDatabase.SaveAssets();
@@ -56,31 +59,19 @@ namespace DUST.EditorTools
             // 預設全關，DSTNetPlayer 只幫自己的角色打開（別人的角色不吃輸入、不開鏡頭）
             pc.enabled = false;
             if (ia) ia.enabled = false;
-            var cam = pc.head.GetComponent<Camera>();
+            var cam = pc.head.GetComponentInChildren<Camera>(true);
             if (cam) cam.enabled = false;
-            var al = pc.head.GetComponent<AudioListener>();
+            var al = pc.head.GetComponentInChildren<AudioListener>(true);
             if (al) al.enabled = false;
 
-            // 別人看到的身體：膠囊 + 指示面向的護目鏡
-            var mat = AssetDatabase.LoadAssetAtPath<Material>(BodyMatPath);
-            if (!mat)
-            {
-                mat = new Material(Shader.Find("HDRP/Lit"));
-                mat.SetColor("_BaseColor", new Color(0.78f, 0.42f, 0.18f));
-                mat.SetFloat("_Smoothness", 0.35f);
-                AssetDatabase.CreateAsset(mat, BodyMatPath);
-            }
-            var cc = root.GetComponent<CharacterController>();
-            float h = pc.standHeight, r = cc.radius;
-            var body = Primitive(root.transform, "Body", PrimitiveType.Capsule, mat);
-            body.localPosition = Vector3.up * (h * 0.5f);
-            body.localScale = new Vector3(r * 2f, h * 0.5f, r * 2f);
-            var visor = Primitive(pc.head, "Visor", PrimitiveType.Cube, mat);
-            visor.localPosition = new Vector3(0f, 0f, r * 0.85f);
-            visor.localScale = new Vector3(r * 1.4f, r * 0.45f, r * 0.5f);
+            // 外觀：鬃狼模型（DSTPlayerSetup 已經放好）；舊的膠囊身體如果還在就拿掉
+            foreach (var n in new[] { "Body" }) { var old = root.transform.Find(n); if (old) Object.DestroyImmediate(old.gameObject); }
+            var oldVisor = pc.head.Find("Visor");
+            if (oldVisor) Object.DestroyImmediate(oldVisor.gameObject);
+            var model = root.transform.Find("Model");
 
             var net = Ensure<DSTNetPlayer>(root);
-            net.body = new[] { body.GetComponent<Renderer>(), visor.GetComponent<Renderer>() };
+            net.body = model ? model.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
 
             var saved = PrefabUtility.SaveAsPrefabAsset(root, DSTPlayerSetup.PrefabPath);
             PrefabUtility.UnloadPrefabContents(root);

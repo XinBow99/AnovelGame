@@ -4,24 +4,27 @@ using UnityEngine;
 
 namespace DUST.Vehicles
 {
-    // 上下車：上車時收起角色、啟用車輛攝影機；下車時找一個沒被擋住的下車點把角色放回去。
-    // 連線：誰在開車由主機決定（一次一個駕駛），上車後車的物理交給駕駛那台電腦跑（Ownership 轉移）。
+    // 上下車：誰在開車由主機決定（一次一個駕駛），上車後車的物理交給駕駛那台電腦跑（Ownership 轉移）。
+    // 有 DSTRideActions（鬃狼的上下車動作）時，上下車交給它播動作；沒有的話維持舊做法（瞬間上車、下車點傳送）。
     public class DSTVehicleEntry : NetworkBehaviour
     {
         public MonoBehaviour vehicle;                  // 實作 IDSTDrivable 的元件（皮卡 / 無人機）；留空 → 自動找
         public DSTChaseCamera vehicleCamera;           // 留空 → 執行時在場景裡找
         public Transform[] exitPoints;                 // 依優先順序：駕駛側、乘客側、車尾
         public float maxExitSpeedKmh = 12f;
+        public float chaseDistance;                    // 追車鏡頭距離 / 高度；0 = 鏡頭預設值（腳踏車要近一點）
+        public float chaseHeight;
 
         const ulong NoDriver = ulong.MaxValue;
         readonly NetworkVariable<ulong> _driver = new NetworkVariable<ulong>(NoDriver);
 
         public bool HasDriver => _driver.Value != NoDriver;
-        public bool CanEnter => !HasDriver && Time.time >= _requestPendingUntil;
+        public bool CanEnter => !HasDriver && Time.time >= _requestPendingUntil && (!_actions || _actions.CurrentPhase == DSTRideActions.Phase.None);
         public bool IsLocalDriver => _localDriver != null;
         public IDSTDrivable Drivable { get; private set; }
 
         DSTPlayerController _localDriver;
+        DSTRideActions _actions;
         float _requestPendingUntil;
         float _enterTime;
         float _blockedMessageUntil;
@@ -36,6 +39,8 @@ namespace DUST.Vehicles
         {
             if (!vehicle) vehicle = GetComponent<IDSTDrivable>() as MonoBehaviour;
             Drivable = vehicle as IDSTDrivable;
+            _actions = GetComponent<DSTRideActions>();
+            if (_actions && !_actions.library) _actions = null;
             if (!vehicleCamera) vehicleCamera = FindAnyObjectByType<DSTChaseCamera>(FindObjectsInactive.Include);
         }
 
@@ -63,45 +68,81 @@ namespace DUST.Vehicles
         {
             if (!CanEnter || player == null) return;
             _requestPendingUntil = Time.time + 1f;     // 等主機回覆，避免連按
-            EnterRpc();
+            if (_actions) _actions.RequestEnter(player);
+            else EnterRpc();
         }
 
         [Rpc(SendTo.Server)]
         void EnterRpc(RpcParams rpc = default)
         {
-            if (HasDriver) return;                     // 別人先上了
-            ulong id = rpc.Receive.SenderClientId;
+            ServerAssignDriver(rpc.Receive.SenderClientId);
+        }
+
+        /// <summary>主機：指定駕駛（物理交給他）。別人已經在開就失敗。</summary>
+        public bool ServerAssignDriver(ulong id)
+        {
+            if (!IsServer || HasDriver) return false;
             _driver.Value = id;
             if (NetworkObject.OwnerClientId != id) NetworkObject.ChangeOwnership(id);
+            return true;
         }
 
         void OnDriverChanged(ulong previous, ulong current)
         {
             _requestPendingUntil = 0f;
-            if (current == NetworkManager.LocalClientId && _localDriver == null) LocalEnter();
+            if (current == NetworkManager.LocalClientId && _localDriver == null)
+            {
+                var me = DSTNetPlayer.Local;
+                if (me == null) return;
+                _localDriver = me.Controller;
+                // 有動作系統：等動作播完才開始開車（DSTRideActions 會呼叫 BeginDriving）
+                if (!_actions) LocalEnter();
+            }
         }
 
         void LocalEnter()
         {
             var me = DSTNetPlayer.Local;
             if (me == null) return;
-            _localDriver = me.Controller;
             me.SetInVehicle(true);
+            me.SetViewCamera(false);
+            BeginDriving(null);
+        }
+
+        /// <summary>開始操控：輸入、追車鏡頭</summary>
+        internal void BeginDriving(DSTRideActions from)
+        {
+            if (_localDriver == null && DSTNetPlayer.Local) _localDriver = DSTNetPlayer.Local.Controller;
             Drivable.PlayerControlled = true;
             if (vehicleCamera)
             {
                 // 鏡頭是所有載具共用的，每次上車都換成這台的目標與駕駛視角
                 vehicleCamera.target = transform;
                 vehicleCamera.cockpitEye = transform.Find("Seat_Driver_Eye");
+                vehicleCamera.SetFraming(chaseDistance, chaseHeight);
                 vehicleCamera.gameObject.SetActive(true);
             }
             _enterTime = Time.time;
+        }
+
+        /// <summary>停止操控（下車動作開始）：車子自己停好、追車鏡頭關掉</summary>
+        internal void StopDriving(DSTRideActions from)
+        {
+            Drivable.PlayerControlled = false;
+            if (vehicleCamera) vehicleCamera.gameObject.SetActive(false);
+        }
+
+        /// <summary>下車動作做完（本地）</summary>
+        internal void ReleaseLocal(DSTRideActions from)
+        {
+            _localDriver = null;
         }
 
         // ------------------------------------------------------------------ 下車
         void Update()
         {
             if (_localDriver == null) return;
+            if (_actions && _actions.Busy) return;
             if (Time.time - _enterTime > 0.25f && DSTPlayerInteractor.InteractPressed())
             {
                 DSTPlayerInteractor.ConsumeInteract();
@@ -116,6 +157,11 @@ namespace DUST.Vehicles
             {
                 Block(reason);
                 return false;
+            }
+            if (_actions)
+            {
+                _actions.RequestExit();
+                return true;
             }
             var cc = _localDriver.GetComponent<CharacterController>();
             foreach (var p in exitPoints)
@@ -139,7 +185,11 @@ namespace DUST.Vehicles
             _localDriver = null;
             Drivable.PlayerControlled = false;
             if (vehicleCamera) vehicleCamera.gameObject.SetActive(false);
-            if (DSTNetPlayer.Local && DSTNetPlayer.Local.IsSpawned) DSTNetPlayer.Local.SetInVehicle(false);
+            if (DSTNetPlayer.Local && DSTNetPlayer.Local.IsSpawned)
+            {
+                DSTNetPlayer.Local.SetInVehicle(false);
+                DSTNetPlayer.Local.SetViewCamera(true);
+            }
         }
 
         [Rpc(SendTo.Server)]
@@ -153,11 +203,18 @@ namespace DUST.Vehicles
             if (_driver.Value == clientId) Release();
         }
 
+        /// <summary>主機：車交還主機</summary>
+        public void ServerRelease()
+        {
+            if (IsServer) Release();
+        }
+
         // 車交還主機（DontDestroyWithOwner，駕駛斷線車也不會消失）
         void Release()
         {
             _driver.Value = NoDriver;
             if (NetworkObject.OwnerClientId != NetworkManager.ServerClientId) NetworkObject.RemoveOwnership();
+            if (_actions) _actions.ServerClear();
         }
 
         // 從下車點往下找地面，確認角色膠囊放得下
@@ -188,6 +245,7 @@ namespace DUST.Vehicles
         void OnGUI()
         {
             if (_localDriver == null) return;
+            if (_actions && _actions.Busy) return;
             if (Time.time < _blockedMessageUntil) DSTHud.CenterPrompt(_blockedMessage);
             DSTHud.BottomHint(Drivable.ControlsHint);
         }

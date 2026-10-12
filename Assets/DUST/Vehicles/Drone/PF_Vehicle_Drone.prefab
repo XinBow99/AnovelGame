@@ -214,6 +214,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
       insertIndex: -1
       addedObject: {fileID: 188050949351303621}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5763133482815198484}
     - targetCorrespondingSourceObject: {fileID: -2891777476901477715, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6044841058224223757}
@@ -314,6 +317,8 @@ MonoBehaviour:
   - {fileID: 4176268849188603798}
   - {fileID: 4109011427048440478}
   maxExitSpeedKmh: 6
+  chaseDistance: 0
+  chaseHeight: 0
 --- !u!114 &2337048672860310203
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -419,6 +424,25 @@ MonoBehaviour:
   baseRadius: 1.5
   lookAheadSeconds: 0.4
   interval: 0.1
+--- !u!114 &5763133482815198484
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4159368643463637823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb2c4437df7e5774286126f4fbbec85f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTRideActions
+  ShowTopMostFoldoutHeaderGroup: 1
+  library: {fileID: 11400000, guid: 71a976315a0413447ab2e052f8e95fe3, type: 2}
+  kind: 2
+  anchor: {fileID: 3671237520529305989}
+  door: {fileID: 0}
+  doorAxis: {x: 0, y: 1, z: 0}
+  doorSign: 1
 --- !u!4 &5571876663484822833 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8659061036160934751, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}

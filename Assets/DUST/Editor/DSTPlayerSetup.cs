@@ -7,15 +7,18 @@ using UnityEngine.Rendering.HighDefinition;
 
 namespace DUST.EditorTools
 {
-    // 建立第一人稱角色 Prefab，並放進目前開著的場景
+    // 建立玩家 Prefab：四足鬃狼（半尺寸世界）。外觀 / 動畫 / 動作系統由 DSTPlayerWolfSetup 準備，這裡只組 Prefab。
     public static class DSTPlayerSetup
     {
         public const string PrefabPath = "Assets/DUST/Player/PF_Player.prefab";
 
-        // 角色是正常成人（1.8 m）的 Scale 倍，跟載具同比例
+        // 世界是正常尺寸的 Scale 倍（載具、動物都一樣）
         public const float Scale = 0.5f;
-        public const float Height = 1.8f * Scale;
-        public const float Radius = 0.35f * Scale;
+        // 鬃狼：背高約 0.45 m、頭頂約 0.55 m；碰撞膠囊包住身體中段
+        public const float Height = 0.55f;
+        public const float Radius = 0.14f;
+        const float EyeHeight = 0.44f;
+        const float EyeForward = 0.22f;      // 眼睛在身體中心前方（四足）
         // 重力不變時，維持「同樣的動作節奏」速度要乘 √Scale（Froude 相似）
         static float SpeedScale => Mathf.Sqrt(Scale);
 
@@ -29,18 +32,21 @@ namespace DUST.EditorTools
             cc.height = Height;
             cc.radius = Radius;
             cc.center = Vector3.up * (Height * 0.5f);
-            cc.stepOffset = 0.35f * Scale;
+            cc.stepOffset = 0.12f;
             cc.slopeLimit = 45f;
-            cc.skinWidth = Mathf.Max(0.01f, 0.04f * Scale);
+            cc.skinWidth = 0.02f;
             cc.minMoveDistance = 0f;
 
+            // Head = 視線的俯仰軸；鏡頭放在子物件（第三人稱時鏡頭會離開眼睛的位置）
             var head = new GameObject("Head").transform;
             head.SetParent(go.transform, false);
-            head.localPosition = Vector3.up * (Height - 0.12f * Scale);
-            var cam = head.gameObject.AddComponent<Camera>();
-            head.gameObject.AddComponent<HDAdditionalCameraData>();
-            head.gameObject.AddComponent<AudioListener>();
-            head.gameObject.tag = "MainCamera";
+            head.localPosition = new Vector3(0f, EyeHeight, EyeForward);
+            var camGo = new GameObject("ViewCamera");
+            camGo.transform.SetParent(head, false);
+            var cam = camGo.AddComponent<Camera>();
+            camGo.AddComponent<HDAdditionalCameraData>();
+            camGo.AddComponent<AudioListener>();
+            camGo.tag = "MainCamera";
             cam.fieldOfView = 75f;
             cam.nearClipPlane = 0.02f;
             cam.farClipPlane = 3000f;
@@ -48,8 +54,9 @@ namespace DUST.EditorTools
             var pc = go.AddComponent<DSTPlayerController>();
             pc.head = head;
             pc.standHeight = Height;
-            pc.crouchHeight = 1.15f * Scale;
-            pc.eyeBelowTop = 0.12f * Scale;
+            pc.crouchHeight = 0.40f;
+            pc.eyeBelowTop = Height - EyeHeight;
+            pc.headForward = EyeForward;
             pc.walkSpeed = 4.2f * SpeedScale;
             pc.sprintSpeed = 6.8f * SpeedScale;
             pc.crouchSpeed = 2.2f * SpeedScale;
@@ -58,7 +65,27 @@ namespace DUST.EditorTools
             var ia = go.AddComponent<DSTPlayerInteractor>();
             ia.viewCamera = cam;
             ia.reach = 3.0f * Scale + 0.6f;
-            ia.proximity = 1.6f * Scale;
+            ia.proximity = 0.6f;
+
+            // 鬃狼模型（走路 Animator + 動作系統）
+            var lib = AssetDatabase.LoadAssetAtPath<DSTActionLibrary>(DSTPlayerWolfSetup.LibraryPath);
+            var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(DSTPlayerWolfSetup.Fbx);
+            if (fbx)
+            {
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(fbx);
+                model.name = "Model";
+                model.transform.SetParent(go.transform, false);
+                model.transform.localRotation = DSTWolfRig.ModelFlip;
+                var anim = model.TryGetComponent<Animator>(out var a) ? a : model.AddComponent<Animator>();
+                anim.applyRootMotion = false;
+                anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;   // 第一人稱只投影子時也要動
+                var rig = go.AddComponent<DSTWolfRig>();
+                rig.model = model.transform;
+                rig.locomotion = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(DSTPlayerWolfSetup.ControllerPath);
+            }
+            else Debug.LogWarning("[DUST] 找不到鬃狼 FBX，先跑 DUST/Player/Build Maned Wolf Player");
+            var view = go.AddComponent<DSTPlayerView>();
+            view.viewCamera = cam;
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(go, PrefabPath);
             Object.DestroyImmediate(go);
