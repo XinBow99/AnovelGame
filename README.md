@@ -12,6 +12,10 @@ Unity 6（6000.6.5f1）+ HDRP 的沙漠遺跡探索遊戲，支援 2–4 人連�
 
 走到載具旁按 **F** 上下車，**C** 切換視角。
 
+## 碰撞物理
+開車撞地圖上的箱子：慢慢頂會推動，撞得夠猛（約 15 km/h 以上）會爆成木板碎片，2 分鐘後在原位重生；木桶只能推。
+門檻在箱子的 `DSTPhysicsProp`（`breakDeltaV`）；重新設定用 **DUST → World → Setup Physics Props**。碎片模型：`DUST/blender/SM_DST_Prop_Crate_Debris.blend`。
+
 ## 日夜循環
 遊戲裡一天 20 分鐘（白天約 12 分鐘、夜晚約 8 分鐘），右上角顯示目前時間。連線時以房主的時間為準。
 調整：場景裡的 `TimeOfDay`（一天長度、開場時間、夜晚亮度 `nightExposure`）；重建燈光設定用 **DUST → World → Setup Day-Night Cycle**。

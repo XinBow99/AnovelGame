@@ -211,6 +211,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7187788988901359633}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 188050949351303621}
     - targetCorrespondingSourceObject: {fileID: -2891777476901477715, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6044841058224223757}
@@ -401,6 +404,21 @@ MonoBehaviour:
   UseRigidBodyForMotion: 0
   AutoUpdateKinematicState: 1
   AutoSetKinematicOnDespawn: 1
+--- !u!114 &188050949351303621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4159368643463637823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5b95ab8f8fb80545bc5d529a0a278f4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTPhysicsClaimer
+  baseRadius: 1.5
+  lookAheadSeconds: 0.4
+  interval: 0.1
 --- !u!4 &5571876663484822833 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8659061036160934751, guid: d837bce2f6c1ef54496f5acf23506a89, type: 3}
