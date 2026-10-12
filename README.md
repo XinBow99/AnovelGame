@@ -12,6 +12,10 @@ Unity 6（6000.6.5f1）+ HDRP 的沙漠遺跡探索遊戲，支援 2–4 人連�
 
 走到載具旁按 **F** 上下車，**C** 切換視角。
 
+## 日夜循環
+遊戲裡一天 20 分鐘（白天約 12 分鐘、夜晚約 8 分鐘），右上角顯示目前時間。連線時以房主的時間為準。
+調整：場景裡的 `TimeOfDay`（一天長度、開場時間、夜晚亮度 `nightExposure`）；重建燈光設定用 **DUST → World → Setup Day-Night Cycle**。
+
 ## 開發
 - 用 Unity Hub 開啟這個資料夾，Unity 版本是 **6000.6.5f1**
 - 主場景：`Assets/DUST/DR2_Map/DR2_DesertRuins02.unity`
