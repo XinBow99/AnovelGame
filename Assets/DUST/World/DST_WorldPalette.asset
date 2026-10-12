@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8d45eb652d12f94fbfe40dd7da95545, type: 3}
+  m_Name: DST_WorldPalette
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTWorldPalette
+  sand: {fileID: 2100000, guid: a21b6719a76eb2d4082db6b67bdc4f8d, type: 2}
+  rock: {fileID: 2100000, guid: 3eec0f4b33e41c44fad9ca65ee357c6c, type: 2}
+  rocks:
+  - {fileID: 919132149155446097, guid: 0b7011402b79f4940b7bf7323975b1ea, type: 3}
+  - {fileID: 919132149155446097, guid: 50ee5c25147d1ce40938ca35b9c73879, type: 3}
+  - {fileID: 919132149155446097, guid: 2ee76c357579b5b40866b0627360a23f, type: 3}
+  - {fileID: 919132149155446097, guid: 1cadf761802df1141bf54c08d62ae4e9, type: 3}
+  - {fileID: 919132149155446097, guid: 0140253bbaec37a47baf27eb4161e025, type: 3}
+  smallRocks:
+  - {fileID: 919132149155446097, guid: 0b7011402b79f4940b7bf7323975b1ea, type: 3}
+  - {fileID: 919132149155446097, guid: 50ee5c25147d1ce40938ca35b9c73879, type: 3}
+  - {fileID: 919132149155446097, guid: 2ee76c357579b5b40866b0627360a23f, type: 3}
+  - {fileID: 919132149155446097, guid: 0140253bbaec37a47baf27eb4161e025, type: 3}
+  drifts:
+  - {fileID: 919132149155446097, guid: f3f2e4c55e93b32459523aee4d4718e2, type: 3}
+  - {fileID: 919132149155446097, guid: b3356a0148378d247bf17d58f0b33a4e, type: 3}
+  - {fileID: 919132149155446097, guid: 365d4dce7d7411949ad6413513b10262, type: 3}
+  rubble:
+  - {fileID: 919132149155446097, guid: 6c882ae36fa330846affa16492019bac, type: 3}
+  - {fileID: 919132149155446097, guid: bd89f250c193eca43a4380fe49438e46, type: 3}
+  - {fileID: 919132149155446097, guid: 204a1f1c6ed7ec04fb462693f29c83c6, type: 3}
+  pots:
+  - {fileID: 919132149155446097, guid: 56fc698e0d6f0504c896cbdb82d87088, type: 3}
+  - {fileID: 919132149155446097, guid: baba233f0d5e82c4f878830cb188ed1b, type: 3}
+  wreck: {fileID: 919132149155446097, guid: 1100f6a38f27d23439f26cf10aff5e69, type: 3}
+  brokenCrate: {fileID: 919132149155446097, guid: c2c961a4abf78a2408dc30d61c81aa2f, type: 3}
+  wallStraight:
+  - {fileID: 919132149155446097, guid: 5ea9b6740b6afe443a50f46ce792d97e, type: 3}
+  - {fileID: 919132149155446097, guid: 9346219f3f5ce5a4985d200d5f483c47, type: 3}
+  wallDamaged:
+  - {fileID: 919132149155446097, guid: 02f926fd43490ab479237bc305efeb53, type: 3}
+  wallWindow:
+  - {fileID: 919132149155446097, guid: 88080e72f9b90e149b5a934b83f56dfb, type: 3}
+  wallGate: {fileID: 919132149155446097, guid: 09f64dfebbe4be14e89a16443311351b, type: 3}
+  wallCorner: {fileID: 919132149155446097, guid: 4e1106adf2bbeb44999daad103be0e4d, type: 3}
+  wallHalf:
+  - {fileID: 919132149155446097, guid: caa5731bbd7d5c2479794d835dfc1b29, type: 3}
+  - {fileID: 919132149155446097, guid: ccfd1f683f5be6945bcf8bddaf6383c2, type: 3}
+  road: {fileID: 2100000, guid: 6dcc5eb808f61e4408a72290ba1133a0, type: 2}
+  water: {fileID: 2100000, guid: 7697deffa080e124aace839d7306ade1, type: 2}
+  roofCap: {fileID: 919132149155446097, guid: 181ce2e1b9f19684eab129860f70fbd2, type: 3}
+  corniceStraight: {fileID: 919132149155446097, guid: 0cee44955f0ce484eafc1342cb33e504, type: 3}
+  corniceCorner: {fileID: 919132149155446097, guid: 958b74e7a588e604e9e1af8c5112b897, type: 3}
+  plinthStraight: {fileID: 919132149155446097, guid: ea9e32a75f4ea1143ad1b973ae3f6c89, type: 3}
+  plinthCorner: {fileID: 919132149155446097, guid: 94691d929138df1419df7465e90229a8, type: 3}
+  well: {fileID: 919132149155446097, guid: 06658916db5763a4086d8a4354397c3a, type: 3}
+  stalls:
+  - {fileID: 919132149155446097, guid: 2e7e892239c5cf94abe96d3d91e38754, type: 3}
+  - {fileID: 919132149155446097, guid: b5ac233cd8ebaec46b3fbd8071a4ad5f, type: 3}
+  palms:
+  - {fileID: 919132149155446097, guid: 7c26a4c470b505e468dca8ef515d58ac, type: 3}
+  - {fileID: 919132149155446097, guid: b012976d4d089ee47b9d0253e72fe9e1, type: 3}
+  barrels:
+  - {fileID: 919132149155446097, guid: bfe8d50ca644bf643a6b09f866b52eec, type: 3}
+  - {fileID: 919132149155446097, guid: 9eab7b6e4f0797349abf66d030c9fc43, type: 3}
+  - {fileID: 919132149155446097, guid: cc96f8155742b214dae40f2c75ae7244, type: 3}
+  crates:
+  - {fileID: 919132149155446097, guid: 25c69cd10b24fae4c8216fa07c854dec, type: 3}
+  - {fileID: 919132149155446097, guid: a8be04c0b0fc25e4ab320e65f7e58848, type: 3}

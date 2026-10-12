@@ -27,6 +27,11 @@ namespace DUST.Vehicles
         float _blockedMessageUntil;
         string _blockedMessage;
 
+        public static readonly System.Collections.Generic.List<DSTVehicleEntry> All = new System.Collections.Generic.List<DSTVehicleEntry>();
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
+
         void Awake()
         {
             if (!vehicle) vehicle = GetComponent<IDSTDrivable>() as MonoBehaviour;

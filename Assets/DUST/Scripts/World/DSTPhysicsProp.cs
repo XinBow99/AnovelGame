@@ -40,6 +40,11 @@ namespace DUST.World
 
         bool HasPhysicsAuthority => !IsSpawned || IsOwner;
 
+        public static readonly System.Collections.Generic.List<DSTPhysicsProp> All = new System.Collections.Generic.List<DSTPhysicsProp>();
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
+
         void Awake()
         {
             _rb = GetComponent<Rigidbody>();
@@ -47,6 +52,13 @@ namespace DUST.World
             _renderers = GetComponentsInChildren<Renderer>();
             _homePos = transform.position;
             _homeRot = transform.rotation;
+        }
+
+        // 隨機世界把箱子搬到出生點附近，碎掉後要在新位置重生
+        public void SetHome(Vector3 position, Quaternion rotation)
+        {
+            _homePos = position;
+            _homeRot = rotation;
         }
 
         public override void OnNetworkSpawn()

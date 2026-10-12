@@ -5,6 +5,7 @@ using Unity.Netcode.Transports.UTP;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Multiplayer;
+using DUST.World;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -25,6 +26,8 @@ namespace DUST.Net
         NetworkManager _nm;
         ISession _session;
         string _codeInput = "";
+        string _seedInput = "";
+        int _worldChoice;                   // 0 = 隨機世界、1 = 遺跡二（開房的人決定）
         string _status = "";
         bool _busy;
         bool _usedRelay;
@@ -76,7 +79,8 @@ namespace DUST.Net
                 _playing = playing;
                 LockCursor(playing);
             }
-            if (playing && EscPressed()) LockCursor(false);
+            // 地圖開著時 Esc 是關地圖（DSTMap 自己處理），不要順便打開暫停選單
+            if (playing && EscPressed() && !DSTMap.IsOpen && DSTMap.ClosedFrame != Time.frameCount) LockCursor(false);
         }
 
         static bool EscPressed()
@@ -107,6 +111,7 @@ namespace DUST.Net
             await Run("建立房間中…", async () =>
             {
                 await SignIn();
+                ApplyWorldChoice();
                 var options = new SessionOptions { MaxPlayers = maxPlayers, IsPrivate = true }.WithRelayNetwork();
                 _usedRelay = true;
                 _session = await MultiplayerService.Instance.CreateSessionAsync(options);
@@ -137,7 +142,14 @@ namespace DUST.Net
                 _usedRelay = false;
             }
             GetComponent<UnityTransport>().SetConnectionData("127.0.0.1", 7777, "127.0.0.1");
+            ApplyWorldChoice();
             if (!_nm.StartHost()) _status = "無法啟動單人模式";
+        }
+
+        void ApplyWorldChoice()
+        {
+            DSTWorld.RequestRandom = _worldChoice == 0;
+            DSTWorld.RequestSeed = DSTWorldGen.ParseSeed(_seedInput);
         }
 
         async void Leave()
@@ -207,17 +219,25 @@ namespace DUST.Net
                 GUI.Label(new Rect(12, 8, 600, 28), $"邀請碼  {Code}    玩家 {_nm.ConnectedClientsIds.Count}/{maxPlayers}", _labelLeft);
 
             // Esc 放開滑鼠時顯示暫停面板
-            if (_playing && Paused) PauseMenu();
+            if (_playing && Paused && !DSTMap.IsOpen) PauseMenu();
         }
 
         void MainMenu()
         {
-            var r = Centered(420, 400);
+            var r = Centered(420, 540);
             GUI.Box(r, GUIContent.none);
             GUILayout.BeginArea(new Rect(r.x + 24, r.y + 20, r.width - 48, r.height - 40));
             GUILayout.Label("DUST", _title, GUILayout.Height(48));
             GUILayout.Space(10);
             GUI.enabled = !_busy;
+            _worldChoice = GUILayout.Toolbar(_worldChoice, WorldNames, _button, GUILayout.Height(38));
+            if (_worldChoice == 0)
+            {
+                GUILayout.Label("種子碼（空白 = 隨機）", _label);
+                _seedInput = GUILayout.TextField(_seedInput, 24, _field, GUILayout.Height(38));
+            }
+            else GUILayout.Space(62);
+            GUILayout.Space(8);
             if (GUILayout.Button("開房（邀請朋友）", _button, GUILayout.Height(48))) Host();
             GUILayout.Space(16);
             GUILayout.Label("朋友的邀請碼", _label);
@@ -233,7 +253,9 @@ namespace DUST.Net
 
         void PauseMenu()
         {
-            var r = Centered(380, 220);
+            var world = DSTWorld.Instance;
+            bool showSeed = world && world.IsRandom;
+            var r = Centered(380, showSeed ? 300 : 220);
             // 點面板外面才回到遊戲；面板裡的按鈕要等放開滑鼠才算按下，不能在按下時就把面板關掉
             var e = Event.current;
             if (e.type == EventType.MouseDown && !r.Contains(e.mousePosition))
@@ -251,6 +273,13 @@ namespace DUST.Net
             }
             else
                 GUILayout.Label(_nm.IsHost ? "單人模式" : "連線中", _title, GUILayout.Height(44));
+            if (showSeed)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("種子碼  " + world.Seed, _labelLeft, GUILayout.Height(36));
+                if (GUILayout.Button("複製", _button, GUILayout.Width(80), GUILayout.Height(36))) GUIUtility.systemCopyBuffer = world.Seed.ToString();
+                GUILayout.EndHorizontal();
+            }
             GUILayout.Space(8);
             GUI.enabled = !_busy;
             if (GUILayout.Button(_nm.IsHost && _session != null ? "關閉房間" : "離開", _button, GUILayout.Height(40))) Leave();
@@ -258,6 +287,8 @@ namespace DUST.Net
             GUILayout.Label("點一下畫面回到遊戲", _label);
             GUILayout.EndArea();
         }
+
+        static readonly string[] WorldNames = { "隨機世界", "遺跡二" };
 
         static Rect Centered(float w, float h) => new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
     }

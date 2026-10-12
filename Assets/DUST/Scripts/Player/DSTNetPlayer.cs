@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DUST.Core;
 using DUST.Net;
+using DUST.World;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -64,8 +65,8 @@ namespace DUST.Player
                 foreach (var r in body)
                     if (r) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
                 DSTNetSession.SetLobbyCamera(false);
-                var (pos, yaw) = SpawnPose();
-                _pc.Teleport(pos, yaw);
+                _needsPlacement = true;
+                TryPlace();
             }
             _inVehicle.OnValueChanged += OnInVehicleChanged;
             Apply(_inVehicle.Value);
@@ -83,8 +84,33 @@ namespace DUST.Player
             }
         }
 
+        // 世界（地面）還沒準備好之前先不要放下去，不然會一路掉出地圖
+        bool _needsPlacement;
+
+        void TryPlace()
+        {
+            if (!_needsPlacement) return;
+            if (!DSTWorld.IsReady)
+            {
+                _pc.enabled = false;
+                return;
+            }
+            _needsPlacement = false;
+            var (pos, yaw) = SpawnPose();
+            _pc.Teleport(pos, yaw);
+            _pc.enabled = !_inVehicle.Value;
+        }
+
         (Vector3, float) SpawnPose()
         {
+            var world = DSTWorld.Instance;
+            if (world && world.IsRandom)
+            {
+                // 隨機世界：出生點在原點，面向車子
+                int k = (int)(OwnerClientId % 8);
+                float s = (k + 1) / 2 * (k % 2 == 0 ? -1f : 1f) * spawnSpacing;
+                return (new Vector3(s, world.GroundHeight(s, 0f) + 0.05f, 0f), 0f);
+            }
             var spawn = GameObject.Find("DR2_Spawn_T");
             Vector3 p = spawn ? spawn.transform.position : transform.position;
             float yaw = spawn ? spawn.transform.eulerAngles.y : 0f;
@@ -126,6 +152,7 @@ namespace DUST.Player
             if (!IsSpawned) return;
             if (IsOwner)
             {
+                TryPlace();
                 if (Mathf.Abs(_pitch.Value - _pc.Pitch) > 0.5f) _pitch.Value = _pc.Pitch;
                 if (_crouching.Value != _pc.IsCrouching) _crouching.Value = _pc.IsCrouching;
                 if (_sprinting.Value != _pc.IsSprinting) _sprinting.Value = _pc.IsSprinting;
