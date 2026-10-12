@@ -6,6 +6,9 @@ using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Multiplayer;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace DUST.Net
 {
@@ -52,6 +55,38 @@ namespace DUST.Net
 
         bool InGame => _nm && _nm.IsListening;
         string Code => _session?.Code;
+
+        // ------------------------------------------------------------------ 滑鼠 / 暫停
+        // 走路、開車都一樣：進場鎖滑鼠，Esc 放開（顯示暫停面板），點面板以外的地方回到遊戲
+        bool _playing;
+
+        public static bool Paused => Cursor.lockState != CursorLockMode.Locked;
+
+        static void LockCursor(bool locked)
+        {
+            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !locked;
+        }
+
+        void Update()
+        {
+            bool playing = InGame && DUST.Player.DSTNetPlayer.Local != null;
+            if (playing != _playing)
+            {
+                _playing = playing;
+                LockCursor(playing);
+            }
+            if (playing && EscPressed()) LockCursor(false);
+        }
+
+        static bool EscPressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(KeyCode.Escape);
+#endif
+        }
 
         // ------------------------------------------------------------------ 連線
         static async Task SignIn()
@@ -172,7 +207,7 @@ namespace DUST.Net
                 GUI.Label(new Rect(12, 8, 600, 28), $"邀請碼  {Code}    玩家 {_nm.ConnectedClientsIds.Count}/{maxPlayers}", _labelLeft);
 
             // Esc 放開滑鼠時顯示暫停面板
-            if (Cursor.lockState != CursorLockMode.Locked) PauseMenu();
+            if (_playing && Paused) PauseMenu();
         }
 
         void MainMenu()
@@ -199,6 +234,14 @@ namespace DUST.Net
         void PauseMenu()
         {
             var r = Centered(380, 220);
+            // 點面板外面才回到遊戲；面板裡的按鈕要等放開滑鼠才算按下，不能在按下時就把面板關掉
+            var e = Event.current;
+            if (e.type == EventType.MouseDown && !r.Contains(e.mousePosition))
+            {
+                LockCursor(true);
+                e.Use();
+                return;
+            }
             GUI.Box(r, GUIContent.none);
             GUILayout.BeginArea(new Rect(r.x + 24, r.y + 16, r.width - 48, r.height - 32));
             if (!string.IsNullOrEmpty(Code))

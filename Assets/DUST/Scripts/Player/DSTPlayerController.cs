@@ -49,19 +49,8 @@ namespace DUST.Player
             _currentHeight = standHeight;
         }
 
-        void OnEnable()
-        {
-            _velocity = Vector3.zero;
-            LockCursor(true);
-        }
-
-        void OnDisable() => LockCursor(false);
-
-        static void LockCursor(bool locked)
-        {
-            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !locked;
-        }
+        // 滑鼠鎖定 / Esc 暫停由 DSTNetSession 統一管理（上車時這個元件會關掉，不能在這裡放開滑鼠）
+        void OnEnable() => _velocity = Vector3.zero;
 
         void Update()
         {
@@ -79,15 +68,9 @@ namespace DUST.Player
                 sprint = kb.leftShiftKey.isPressed;
                 jump = kb.spaceKey.wasPressedThisFrame;
                 crouchHeld = kb.leftCtrlKey.isPressed || kb.cKey.isPressed;
-                if (kb.escapeKey.wasPressedThisFrame) LockCursor(false);
             }
-            if (mouse != null)
-            {
-                if (Cursor.lockState == CursorLockMode.Locked)
-                    look += mouse.delta.ReadValue() * mouseSensitivity;
-                else if (mouse.leftButton.wasPressedThisFrame)
-                    LockCursor(true);
-            }
+            if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
+                look += mouse.delta.ReadValue() * mouseSensitivity;
             var gp = Gamepad.current;
             if (gp != null)
             {

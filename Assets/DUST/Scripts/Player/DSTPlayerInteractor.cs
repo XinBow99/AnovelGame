@@ -34,7 +34,10 @@ namespace DUST.Player
         {
             _target = FindTarget();
             if (_target != null && InteractPressed())
+            {
+                ConsumeInteract();
                 _target.Enter(_player);
+            }
             if (AttackPressed() && Time.time >= _nextPunch)
                 Punch();
         }
@@ -67,8 +70,13 @@ namespace DUST.Player
             }
         }
 
+        // 同一次按鍵只處理一次：下車那一幀角色的互動剛被打開，不能又被拿去上車（原本那台或旁邊那台）
+        static int _consumedFrame = -1;
+        public static void ConsumeInteract() => _consumedFrame = Time.frameCount;
+
         public static bool InteractPressed()
         {
+            if (_consumedFrame == Time.frameCount) return false;
 #if ENABLE_INPUT_SYSTEM
             return (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame) ||
                    (Gamepad.current != null && Gamepad.current.buttonWest.wasPressedThisFrame);

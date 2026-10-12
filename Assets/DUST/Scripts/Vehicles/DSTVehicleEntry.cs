@@ -37,7 +37,13 @@ namespace DUST.Vehicles
         public override void OnNetworkSpawn()
         {
             _driver.OnValueChanged += OnDriverChanged;
-            if (IsServer) NetworkManager.OnClientDisconnectCallback += OnClientLeft;
+            if (IsServer)
+            {
+                NetworkManager.OnClientDisconnectCallback += OnClientLeft;
+                // 場景裡的車關房後不會重建，上一場離開時還在車上的駕駛會留在變數裡 → 新開房要清掉
+                _driver.Value = NoDriver;
+            }
+            _requestPendingUntil = 0f;
         }
 
         public override void OnNetworkDespawn()
@@ -92,7 +98,10 @@ namespace DUST.Vehicles
         {
             if (_localDriver == null) return;
             if (Time.time - _enterTime > 0.25f && DSTPlayerInteractor.InteractPressed())
+            {
+                DSTPlayerInteractor.ConsumeInteract();
                 TryExit();
+            }
         }
 
         public bool TryExit()
