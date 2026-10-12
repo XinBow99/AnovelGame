@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace DUST.Core
 {
-    // 解析度下限 1920×1080：啟動時、或視窗被拉小時，自動拉回 1080p（螢幕本身比較小就以螢幕為上限）。
-    // 全螢幕用螢幕原生解析度；Alt+Enter 切換全螢幕 / 視窗。
+    // 解析度下限 1920×1080：啟動時、或視窗被拉小時，自動拉回 1080p（螢幕放不下就以螢幕能放的最大視窗為準）。
+    // 預設是視窗模式，不強制全螢幕；最大化或 Alt+Enter 切換全螢幕。
     public class DSTDisplay : MonoBehaviour
     {
         public const int MinWidth = 1920;
@@ -42,12 +42,12 @@ namespace DUST.Core
             if (mode == FullScreenMode.Windowed)
             {
                 if (!belowMin) return;
-                bool fits = display.width >= MinWidth + WindowChromeW && display.height >= MinHeight + WindowChromeH;
-                if (fits)
-                    Apply(Mathf.Max(Screen.width, MinWidth), Mathf.Max(Screen.height, MinHeight), mode);
-                else
-                    // 螢幕放不下 1080p 的視窗（例如 1080p 螢幕）→ 直接全螢幕，不然 Windows 會一直把視窗縮小
-                    Apply(display.width, display.height, FullScreenMode.FullScreenWindow);
+                // 螢幕放不下 1080p 的視窗（例如 1080p 螢幕）→ 下限改成螢幕能放的最大視窗，不強制全螢幕；
+                // 目標一定要放得下，不然 Windows 會把視窗縮回去，變成每半秒來回拉扯
+                int minW = Mathf.Min(MinWidth, display.width - WindowChromeW);
+                int minH = Mathf.Min(MinHeight, display.height - WindowChromeH);
+                if (Screen.width < minW || Screen.height < minH)
+                    Apply(Mathf.Max(Screen.width, minW), Mathf.Max(Screen.height, minH), mode);
                 return;
             }
 
