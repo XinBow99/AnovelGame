@@ -1,0 +1,179 @@
+using DUST.Player;
+using Unity.Netcode;
+using UnityEngine;
+
+namespace DUST.Vehicles
+{
+    // 上下車：上車時收起角色、啟用車輛攝影機；下車時找一個沒被擋住的下車點把角色放回去。
+    // 連線：誰在開車由主機決定（一次一個駕駛），上車後車的物理交給駕駛那台電腦跑（Ownership 轉移）。
+    public class DSTVehicleEntry : NetworkBehaviour
+    {
+        public DSTVehicleController vehicle;
+        public DSTChaseCamera vehicleCamera;           // 留空 → 執行時在場景裡找
+        public Transform[] exitPoints;                 // 依優先順序：駕駛側、乘客側、車尾
+        public float maxExitSpeedKmh = 12f;
+
+        const ulong NoDriver = ulong.MaxValue;
+        readonly NetworkVariable<ulong> _driver = new NetworkVariable<ulong>(NoDriver);
+
+        public bool HasDriver => _driver.Value != NoDriver;
+        public bool CanEnter => !HasDriver && Time.time >= _requestPendingUntil;
+        public bool IsLocalDriver => _localDriver != null;
+
+        DSTPlayerController _localDriver;
+        float _requestPendingUntil;
+        float _enterTime;
+        float _blockedMessageUntil;
+        string _blockedMessage;
+
+        void Awake()
+        {
+            if (!vehicle) vehicle = GetComponent<DSTVehicleController>();
+            if (!vehicleCamera) vehicleCamera = FindAnyObjectByType<DSTChaseCamera>(FindObjectsInactive.Include);
+        }
+
+        public override void OnNetworkSpawn()
+        {
+            _driver.OnValueChanged += OnDriverChanged;
+            if (IsServer) NetworkManager.OnClientDisconnectCallback += OnClientLeft;
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            _driver.OnValueChanged -= OnDriverChanged;
+            if (IsServer && NetworkManager) NetworkManager.OnClientDisconnectCallback -= OnClientLeft;
+            if (_localDriver != null) LocalExit();   // 斷線時還在車上
+        }
+
+        // ------------------------------------------------------------------ 上車
+        public void Enter(DSTPlayerController player)
+        {
+            if (!CanEnter || player == null) return;
+            _requestPendingUntil = Time.time + 1f;     // 等主機回覆，避免連按
+            EnterRpc();
+        }
+
+        [Rpc(SendTo.Server)]
+        void EnterRpc(RpcParams rpc = default)
+        {
+            if (HasDriver) return;                     // 別人先上了
+            ulong id = rpc.Receive.SenderClientId;
+            _driver.Value = id;
+            if (NetworkObject.OwnerClientId != id) NetworkObject.ChangeOwnership(id);
+        }
+
+        void OnDriverChanged(ulong previous, ulong current)
+        {
+            _requestPendingUntil = 0f;
+            if (current == NetworkManager.LocalClientId && _localDriver == null) LocalEnter();
+        }
+
+        void LocalEnter()
+        {
+            var me = DSTNetPlayer.Local;
+            if (me == null) return;
+            _localDriver = me.Controller;
+            me.SetInVehicle(true);
+            vehicle.playerControlled = true;
+            if (vehicleCamera)
+            {
+                vehicleCamera.target = vehicle;
+                if (!vehicleCamera.cockpitEye) vehicleCamera.cockpitEye = transform.Find("Seat_Driver_Eye");
+                vehicleCamera.gameObject.SetActive(true);
+            }
+            _enterTime = Time.time;
+        }
+
+        // ------------------------------------------------------------------ 下車
+        void Update()
+        {
+            if (_localDriver == null) return;
+            if (Time.time - _enterTime > 0.25f && DSTPlayerInteractor.InteractPressed())
+                TryExit();
+        }
+
+        public bool TryExit()
+        {
+            if (_localDriver == null) return false;
+            if (Mathf.Abs(vehicle.SpeedKmh) > maxExitSpeedKmh)
+            {
+                Block("先減速才能下車");
+                return false;
+            }
+            var cc = _localDriver.GetComponent<CharacterController>();
+            foreach (var p in exitPoints)
+            {
+                if (!p) continue;
+                if (!FindStandPoint(p.position, cc, out var stand)) continue;
+
+                var player = _localDriver;
+                LocalExit();
+                // 面向車頭方向，方便看到車
+                player.Teleport(stand, Quaternion.LookRotation(Vector3.ProjectOnPlane(transform.forward, Vector3.up)).eulerAngles.y);
+                ExitRpc();
+                return true;
+            }
+            Block("下車位置被擋住了");
+            return false;
+        }
+
+        void LocalExit()
+        {
+            _localDriver = null;
+            vehicle.playerControlled = false;
+            vehicle.SetInput(0f, 0f, true);
+            if (vehicleCamera) vehicleCamera.gameObject.SetActive(false);
+            if (DSTNetPlayer.Local && DSTNetPlayer.Local.IsSpawned) DSTNetPlayer.Local.SetInVehicle(false);
+        }
+
+        [Rpc(SendTo.Server)]
+        void ExitRpc(RpcParams rpc = default)
+        {
+            if (_driver.Value == rpc.Receive.SenderClientId) Release();
+        }
+
+        void OnClientLeft(ulong clientId)
+        {
+            if (_driver.Value == clientId) Release();
+        }
+
+        // 車交還主機（DontDestroyWithOwner，駕駛斷線車也不會消失）
+        void Release()
+        {
+            _driver.Value = NoDriver;
+            if (NetworkObject.OwnerClientId != NetworkManager.ServerClientId) NetworkObject.RemoveOwnership();
+        }
+
+        // 從下車點往下找地面，確認角色膠囊放得下
+        public bool FindStandPoint(Vector3 around, CharacterController cc, out Vector3 stand)
+        {
+            stand = around;
+            float r = cc ? cc.radius : 0.35f, h = cc ? cc.height : 1.8f;
+            Vector3 probe = around + Vector3.up * 1.5f;
+            if (Physics.Raycast(probe, Vector3.down, out var hit, 4f, ~0, QueryTriggerInteraction.Ignore) && !hit.transform.IsChildOf(transform))
+                stand = hit.point + Vector3.up * 0.02f;
+            else
+                return false;
+            Vector3 a = stand + Vector3.up * (r + 0.05f), b = stand + Vector3.up * (h - r);
+            foreach (var c in Physics.OverlapCapsule(a, b, r, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (cc && (c.transform == cc.transform || c.transform.IsChildOf(cc.transform))) continue;
+                return false;
+            }
+            return true;
+        }
+
+        void Block(string msg)
+        {
+            _blockedMessage = msg;
+            _blockedMessageUntil = Time.time + 1.5f;
+        }
+
+        void OnGUI()
+        {
+            if (_localDriver == null) return;
+            if (Time.time < _blockedMessageUntil) DSTHud.CenterPrompt(_blockedMessage);
+            DSTHud.BottomHint("[F] 下車    [C] 切換視角    [Space] 手煞車");
+        }
+    }
+}

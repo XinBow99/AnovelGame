@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e192ce0d0ef8fb45a820be8e1a0f2e6, type: 3}
+  m_Name: SPC_ManedWolf
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Animals.DSTSpeciesDefinition
+  displayName: "\u9B03\u72FC"
+  scientificName: Chrysocyon brachyurus
+  prefab: {fileID: 995080181221523551, guid: 9ef54fd86b7ff4745a1ef903a6cda9db, type: 3}
+  maxHealth: 8
+  walkSpeed: 0.75
+  runSpeed: 4
+  turnSpeedDeg: 320
+  acceleration: 12
+  temperament: 1
+  activity: 2
+  noticeRadius: 9
+  fleeRadius: 4.5
+  calmRadius: 16
+  sprintNoticeMultiplier: 1.6
+  crouchNoticeMultiplier: 0.45
+  vehicleNoticeMultiplier: 2
+  idleTime: {x: 3, y: 8}
+  sniffTime: {x: 2, y: 5}
+  alertTime: {x: 0.8, y: 2}
+  sniffChance: 0.4
+  wanderRadius: 10
+  fleeDistance: 14
+  spawns: 1
+  maxAlive: 4
+  groupSize: {x: 1, y: 1}
+  minSpawnDistance: 14
+  maxSpawnDistance: 40
+  despawnDistance: 65

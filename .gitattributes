@@ -1,0 +1,35 @@
+* text=auto
+
+# 程式與 Unity YAML：統一 LF，場景 / Prefab 用 Unity 的 Smart Merge 比較好合併
+*.cs        text eol=lf diff=csharp
+*.shader    text eol=lf
+*.hlsl      text eol=lf
+*.uss       text eol=lf
+*.uxml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.unity     text eol=lf merge=unityyamlmerge
+*.prefab    text eol=lf merge=unityyamlmerge
+*.asset     text eol=lf merge=unityyamlmerge
+*.mat       text eol=lf merge=unityyamlmerge
+*.meta      text eol=lf merge=unityyamlmerge
+*.controller text eol=lf merge=unityyamlmerge
+*.anim      text eol=lf merge=unityyamlmerge
+
+# 二進位素材（目前不用 LFS：單檔都 < 100 MB，而且 LFS 流量會被 CI 吃光）
+*.fbx  binary
+*.png  binary
+*.jpg  binary
+*.tga  binary
+*.psd  binary
+*.exr  binary
+*.hdr  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.blend binary
+
+# 烘焙資料雖然副檔名是 .asset 但其實是二進位，不能做換行轉換
+NavMesh*.asset binary
+LightingData.asset binary
