@@ -49,7 +49,7 @@ namespace DUST.Vehicles
 
         public float SpeedKmh => !_rb ? 0f : _rb.isKinematic ? _syncedSpeedKmh : Vector3.Dot(_rb.linearVelocity, transform.forward) * 3.6f;
         public bool IsGrounded { get; private set; }
-        public string ControlsHint => "[F] 下機    [W/S] 推力    [A/D] 轉向    [Space/Ctrl] 升降    [C] 切換視角";
+        public string ControlsHint => "[F] 下機    [W/S] 推力    [A/D] 轉向    [Space/Ctrl] 升降    [C] 切換視角    [滑鼠] 環顧";
         public string EnterHint => "[F] 上機";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)

@@ -35,8 +35,10 @@ namespace DUST.Vehicles
             {
                 bool was = _controlled;
                 _controlled = value;
-                if (value && !was) OnRent();
-                if (!value && was) OnReturn();
+                if (value && !was) { _returnPending = false; OnRent(); }
+                // 有鬃狼動作時，下車動作還在播（模型掛在車上）：等 FinishReturn 再停回車柱，
+                // 不然車子一開始下車就瞬移進車柱，鬃狼會跳到隔壁停著的車上
+                if (!value && was) { if (_hasActions) _returnPending = true; else OnReturn(); }
             }
         }
 
@@ -45,7 +47,7 @@ namespace DUST.Vehicles
         public float CrankAngle => _crankAngle;
         /// <summary>龍頭輸入 -1..1（正 = 右轉）</summary>
         public float SteerInput => _steer;
-        public string ControlsHint => "[F] 還車 / 下車    [W] 踩踏板    [S] 煞車    [A/D] 轉向    [C] 切換視角";
+        public string ControlsHint => "[F] 還車 / 下車    [W] 踩踏板    [S] 煞車    [A/D] 轉向    [C] 切換視角    [滑鼠] 環顧";
         public string EnterHint => "[F] 租借 MeBike";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)
@@ -71,6 +73,7 @@ namespace DUST.Vehicles
         // 租借計費（跟台灣公共自行車差不多：前 30 分鐘 5 元，之後每 30 分鐘 10 元）
         float _rentStart = -1f;
         bool _pullOutPending;
+        bool _returnPending;
 
         void Awake()
         {
@@ -273,6 +276,14 @@ namespace DUST.Vehicles
 
         /// <summary>還在等牽出來（走過去的目標還不準）</summary>
         public bool PullOutPending => _pullOutPending;
+
+        /// <summary>鬃狼下車動作做完：還車（停回車柱、計費）</summary>
+        public void FinishReturn()
+        {
+            if (!_returnPending) return;
+            _returnPending = false;
+            OnReturn();
+        }
 
         void OnReturn()
         {

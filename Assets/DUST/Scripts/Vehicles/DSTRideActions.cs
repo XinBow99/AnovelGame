@@ -63,6 +63,8 @@ namespace DUST.Vehicles
         // 走過去（只有駕駛自己那台電腦）
         readonly List<Vector3> _path = new List<Vector3>();
         float _approachUntil;
+        bool _enterRequested;
+        float _bestDist, _progressAt;     // 卡住偵測：多久沒有更靠近目標
 
         // 主機：每個玩家上次用過的片段，避免連續一樣
         readonly Dictionary<ulong, int> _lastClip = new Dictionary<ulong, int>();
@@ -298,16 +300,21 @@ namespace DUST.Vehicles
             _clipStarted = false;
             _exitDone = false;
             _exitWait = 0f;
+            _approachUntil = 0f;
+            _enterRequested = false;
             if (to.phase == Phase.None)
             {
                 // 下車做完（或中斷）：模型還掛在這台車上的話交回去
                 if (_rig && _rig.InAction && _rig.model.parent == anchor) _rig.ReturnToLocomotion(0.15f);
                 _riding = false;
                 _driverPlayer = null; _rig = null;
+                IgnoreDriverCollision(null);
+                if (_bike) _bike.FinishReturn();      // 中斷時也要把車停好（正常下車在 TickExit 已經做過）
                 return;
             }
             _driverPlayer = FindPlayer(to.driver);
             _rig = _driverPlayer ? _driverPlayer.GetComponent<DSTWolfRig>() : null;
+            IgnoreDriverCollision(_driverPlayer ? _driverPlayer.GetComponent<CharacterController>() : null);
             _plan = MakePlan(library.At(to.clip), to.seed, to.phase != Phase.Exit);
             if (to.phase == Phase.Approach) BeginApproach(to);
             if (to.phase == Phase.Exit)
@@ -316,6 +323,23 @@ namespace DUST.Vehicles
                 if (IsLocalDriver(to)) _entry.StopDriving(this);
                 ForceView(true);
             }
+        }
+
+        // 上下車整段時間，駕駛的膠囊不跟這台車互撞：
+        // 不然 MeBike 牽出來時剛好壓在鬃狼身上、或鬃狼走過去擦到車，車子會被一直推走，鬃狼就追著車跑
+        CharacterController _ignoredDriver;
+        void IgnoreDriverCollision(CharacterController cc)
+        {
+            if (_ignoredDriver == cc) return;
+            if (_ignoredDriver) SetIgnore(_ignoredDriver, false);
+            _ignoredDriver = cc;
+            if (cc) SetIgnore(cc, true);
+        }
+
+        void SetIgnore(CharacterController cc, bool ignore)
+        {
+            foreach (var c in _ownColliders)
+                if (c && !c.isTrigger) Physics.IgnoreCollision(cc, c, ignore);
         }
 
         static DSTNetPlayer FindPlayer(ulong id)
@@ -360,7 +384,18 @@ namespace DUST.Vehicles
                 foreach (var c in Ordered(a, useFront ? front : back)) _path.Add(anchor.TransformPoint(c));
             }
             _path.Add(start);
-            _approachUntil = Time.time + 9f;
+            if (_approachUntil <= 0f) _approachUntil = Time.time + 9f;   // 牽車後重新規劃路線時不重新計時
+            ResetProgress();
+        }
+
+        void ResetProgress() { _bestDist = float.MaxValue; _progressAt = Time.time; }
+
+        // 走不到起點（被旁邊停的車、車柱擋住）也不要一直頂著：直接開始播，動作開頭的 warp 會接過去
+        void RequestStartEnter()
+        {
+            if (_enterRequested) return;
+            _enterRequested = true;
+            StartEnterRpc();
         }
 
         static IEnumerable<Vector3> Ordered(Vector3 from, Vector3[] corners)
@@ -400,6 +435,7 @@ namespace DUST.Vehicles
         {
             if (!IsLocalDriver(s)) return;
             var pc = _driverPlayer.Controller;
+            if (Time.time > _approachUntil) { RequestStartEnter(); return; }
             // 車子還在牽出來：先站著等，牽好之後重新規劃路線
             if (_bike && _bike.PullOutPending) { pc.Simulate(Vector2.zero, false, false, false, Time.deltaTime); _path.Clear(); return; }
             if (_path.Count == 0) { BeginApproach(s); return; }
@@ -420,17 +456,24 @@ namespace DUST.Vehicles
                 float speed = _plan.approachSpeed * Mathf.Clamp01(1f - Mathf.Abs(turn) / 120f);
                 if (last) speed = Mathf.Min(speed, flat.magnitude * 3f + 0.2f);
                 pc.Simulate(new Vector2(0f, Mathf.Clamp01(speed / pc.walkSpeed)), false, false, false, dt);
+
+                // 卡住了（1.2 秒沒有更靠近）：中途點就跳過，最後一段就直接開始上車
+                if (flat.magnitude < _bestDist - 0.05f) { _bestDist = flat.magnitude; _progressAt = Time.time; }
+                else if (Time.time - _progressAt > 1.2f)
+                {
+                    if (last) RequestStartEnter();
+                    else { _path.RemoveAt(0); ResetProgress(); }
+                }
             }
-            else if (!last) _path.RemoveAt(0);
+            else if (!last) { _path.RemoveAt(0); ResetProgress(); }
             else
             {
                 // 到了：轉成片段開頭的朝向
                 float turn = Mathf.DeltaAngle(pc.transform.eulerAngles.y, wantYaw);
                 pc.transform.Rotate(0f, Mathf.Clamp(turn, -240f * dt, 240f * dt), 0f);
                 pc.Simulate(Vector2.zero, false, false, false, dt);
-                if (Mathf.Abs(turn) < 12f) { StartEnterRpc(); _approachUntil = float.MaxValue; }
+                if (Mathf.Abs(turn) < 12f) RequestStartEnter();
             }
-            if (Time.time > _approachUntil) { StartEnterRpc(); _approachUntil = float.MaxValue; }
         }
 
         // ------------------------------------------------------------------ 上車動作 → 騎乘
@@ -535,6 +578,7 @@ namespace DUST.Vehicles
                 _rig.ReturnToLocomotion(0.15f);
                 ForceView(false);
                 _entry.ReleaseLocal(this);
+                if (_bike) _bike.FinishReturn();      // 鬃狼下來之後才把車停回車柱
                 ExitDoneRpc();
                 _exitDone = true;
                 return;
@@ -552,10 +596,63 @@ namespace DUST.Vehicles
         Vector3 EndWorld(DSTActionClip c, out float yaw)
         {
             var p = anchor.TransformPoint(new Vector3(c.endPos.x, 0f, c.endPos.z));
-            if (Physics.Raycast(p + Vector3.up * 1.5f, Vector3.down, out var hit, 4f, ~0, QueryTriggerInteraction.Ignore) && System.Array.IndexOf(_ownColliders, hit.collider) < 0)
-                p = hit.point + Vector3.up * 0.02f;
             yaw = anchor.eulerAngles.y + c.endYaw;
-            return p;
+            if (FindStand(p, out var stand)) return stand;
+            if (Ground(p, out var g)) p = g;
+            return p + Vector3.up * 0.02f;
+        }
+
+        static readonly float[] StandRings = { 0f, 0.2f, 0.4f, 0.6f, 0.85f, 1.1f, 1.4f };
+
+        // 下車點附近找一個「踩在地上、膠囊放得下」的位置：
+        // MeBike 站裡左右都是停著的車，片段的終點常常剛好落在隔壁那台車上（以前會站到車上面卡住）
+        bool FindStand(Vector3 around, out Vector3 stand)
+        {
+            var cc = _driverPlayer ? _driverPlayer.GetComponent<CharacterController>() : null;
+            float r = cc ? cc.radius : 0.14f, h = cc ? cc.height : 0.55f;
+            foreach (float ring in StandRings)
+            {
+                int n = ring <= 0f ? 1 : 10;
+                for (int i = 0; i < n; i++)
+                {
+                    var p = around + Quaternion.Euler(0f, i * 360f / n, 0f) * Vector3.forward * ring;
+                    if (!Ground(p, out var g)) continue;
+                    if (Mathf.Abs(g.y - around.y) > 0.6f) continue;            // 不要跑到屋頂、坑裡
+                    var a = g + Vector3.up * (r + 0.05f);
+                    var b = g + Vector3.up * Mathf.Max(r + 0.05f, h - r);
+                    if (Blocked(a, b, r, cc)) continue;
+                    stand = g + Vector3.up * 0.02f;
+                    return true;
+                }
+            }
+            stand = around;
+            return false;
+        }
+
+        // 往下找地面：自己這台車、其他有剛體的東西（別台腳踏車、箱子）都不算地面
+        bool Ground(Vector3 p, out Vector3 ground)
+        {
+            ground = p;
+            var hits = Physics.RaycastAll(p + Vector3.up * 1.5f, Vector3.down, 4f, ~0, QueryTriggerInteraction.Ignore);
+            float best = float.MaxValue;
+            foreach (var hit in hits)
+            {
+                if (System.Array.IndexOf(_ownColliders, hit.collider) >= 0) continue;
+                if (hit.collider.attachedRigidbody || hit.collider is CharacterController) continue;
+                if (hit.distance < best) { best = hit.distance; ground = hit.point; }
+            }
+            return best < float.MaxValue;
+        }
+
+        bool Blocked(Vector3 a, Vector3 b, float r, CharacterController self)
+        {
+            foreach (var c in Physics.OverlapCapsule(a, b, r, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (self && (c.transform == self.transform || c.transform.IsChildOf(self.transform))) continue;
+                if (_rig && c.transform.IsChildOf(_rig.model)) continue;
+                return true;
+            }
+            return false;
         }
 
         // ------------------------------------------------------------------ 車門

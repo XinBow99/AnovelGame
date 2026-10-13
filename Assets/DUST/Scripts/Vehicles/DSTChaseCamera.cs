@@ -1,3 +1,4 @@
+using DUST.Player;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -5,7 +6,8 @@ using UnityEngine.InputSystem;
 
 namespace DUST.Vehicles
 {
-    // 追車攝影機；C 鍵（手把 Y）切換駕駛座視角
+    // 追車攝影機；C 鍵（手把 Y）切換駕駛座視角。
+    // 滑鼠（手把右搖桿）自由繞著車子看 / 駕駛座裡轉頭；放著不動一下子就自己轉回車子後方。
     public class DSTChaseCamera : MonoBehaviour
     {
         public Transform target;          // 上車時由 DSTVehicleEntry 指定（皮卡、無人機共用這台鏡頭）
@@ -17,8 +19,14 @@ namespace DUST.Vehicles
         public float rotationDamping = 4f;
         public bool cockpit;
 
+        [Header("Free look")]
+        public float mouseSensitivity = 0.1f;   // 度 / 像素（跟走路一樣）
+        public float recenterDelay = 1.5f;      // 滑鼠停多久開始轉回去
+        public float recenterSpeed = 2.5f;
+
         float _yaw;
         float _defaultDistance = -1f, _defaultHeight;
+        float _freeYaw, _freePitch, _lastLook = -99f;
 
         // 每台載具可以有自己的追車距離；0 = 用預設
         public void SetFraming(float dist, float h)
@@ -31,6 +39,7 @@ namespace DUST.Vehicles
         // 每次啟用（上車）都直接放到車後方，不要從上次的位置慢慢飛過來
         void OnEnable()
         {
+            _freeYaw = 0f; _freePitch = 0f; _lastLook = -99f;
             if (!target) return;
             var t = target.transform;
             _yaw = t.eulerAngles.y;
@@ -48,28 +57,52 @@ namespace DUST.Vehicles
 #else
             if (Input.GetKeyDown(KeyCode.C)) cockpit = !cockpit;
 #endif
+            UpdateFreeLook();
             var t = target.transform;
             if (cockpit && cockpitEye)
             {
-                transform.SetPositionAndRotation(cockpitEye.position, Quaternion.LookRotation(t.forward, t.up));
+                // 駕駛座：轉頭看（左右 ±120°、上下 ±60°）
+                var head = Quaternion.LookRotation(t.forward, t.up) * Quaternion.Euler(Mathf.Clamp(_freePitch, -60f, 60f), Mathf.Clamp(_freeYaw, -120f, 120f), 0f);
+                transform.SetPositionAndRotation(cockpitEye.position, head);
                 return;
             }
 
             // 倒車時不要把鏡頭甩到車頭
             float wantYaw = t.eulerAngles.y;
             _yaw = Mathf.LerpAngle(_yaw, wantYaw, 1f - Mathf.Exp(-rotationDamping * Time.deltaTime));
-            var rot = Quaternion.Euler(0f, _yaw, 0f);
-            var want = t.position + Vector3.up * height - rot * Vector3.forward * distance;
-
-            // 不要穿牆：從車往鏡頭打射線
+            var rot = Quaternion.Euler(0f, _yaw + _freeYaw, 0f);
+            // 上下：繞著看的點轉（正 = 鏡頭抬高往下看）
+            var offset = rot * (Quaternion.Euler(_freePitch, 0f, 0f) * new Vector3(0f, height - lookHeight, -distance));
             var from = t.position + Vector3.up * lookHeight;
+            var want = from + offset;
+
+            // 不要穿牆：從車往鏡頭打射線（有剛體的東西不擋，例如站上其他腳踏車）
             var dir = want - from;
             if (Physics.SphereCast(from, 0.25f, dir.normalized, out var hit, dir.magnitude, ~0, QueryTriggerInteraction.Ignore)
-                && !hit.transform.IsChildOf(t))
+                && !hit.transform.IsChildOf(t) && !hit.collider.attachedRigidbody)
                 want = from + dir.normalized * Mathf.Max(1.0f, hit.distance - 0.2f);
 
-            transform.position = Vector3.Lerp(transform.position, want, 1f - Mathf.Exp(-positionDamping * Time.deltaTime));
-            transform.rotation = Quaternion.LookRotation(t.position + Vector3.up * lookHeight - transform.position);
+            // 滑鼠正在轉的時候跟手一點，不然會覺得鏡頭黏黏的
+            float damp = Time.time - _lastLook < 0.3f ? positionDamping * 3f : positionDamping;
+            transform.position = Vector3.Lerp(transform.position, want, 1f - Mathf.Exp(-damp * Time.deltaTime));
+            transform.rotation = Quaternion.LookRotation(from - transform.position);
+        }
+
+        void UpdateFreeLook()
+        {
+            var look = DSTPlayerController.ReadLookInput(mouseSensitivity);
+            if (look.sqrMagnitude > 1e-4f)
+            {
+                _freeYaw = Mathf.Repeat(_freeYaw + look.x + 180f, 360f) - 180f;
+                _freePitch = Mathf.Clamp(_freePitch - look.y, cockpit ? -60f : -25f, 60f);
+                _lastLook = Time.time;
+            }
+            else if (Time.time - _lastLook > recenterDelay)
+            {
+                float k = 1f - Mathf.Exp(-recenterSpeed * Time.deltaTime);
+                _freeYaw = Mathf.LerpAngle(_freeYaw, 0f, k);
+                _freePitch = Mathf.Lerp(_freePitch, 0f, k);
+            }
         }
     }
 }

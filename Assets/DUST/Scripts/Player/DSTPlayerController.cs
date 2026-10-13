@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 namespace DUST.Player
 {
     // 鬃狼的移動：WASD 移動、Shift 跑、Space 跳、Ctrl 蹲、滑鼠視角（C 切換第一 / 第三人稱）。手把：左搖桿移動、右搖桿視角、A 跳、B 蹲、L3 跑。
+    // 按住 Alt（手把 R3）自由視角：只轉鏡頭、身體不跟著轉，放開後鏡頭轉回來。
     // Esc 放開滑鼠游標，點一下畫面再鎖回來。
     [RequireComponent(typeof(CharacterController))]
     public class DSTPlayerController : MonoBehaviour
@@ -39,6 +40,7 @@ namespace DUST.Player
         public float Pitch => _pitch;
 
         CharacterController _cc;
+        DSTPlayerView _view;
         Vector3 _velocity;
         float _pitch;
         bool _crouching;
@@ -47,7 +49,34 @@ namespace DUST.Player
         void Awake()
         {
             _cc = GetComponent<CharacterController>();
+            _view = GetComponent<DSTPlayerView>();
             _currentHeight = standHeight;
+        }
+
+        /// <summary>這一幀的視角輸入（度）：滑鼠（游標鎖住時）+ 手把右搖桿。追車鏡頭、上下車鏡頭也用這個。</summary>
+        public static Vector2 ReadLookInput(float mouseSensitivity = 0.1f, float gamepadLookSpeed = 160f)
+        {
+            var look = Vector2.zero;
+#if ENABLE_INPUT_SYSTEM
+            if (Mouse.current != null && Cursor.lockState == CursorLockMode.Locked)
+                look += Mouse.current.delta.ReadValue() * mouseSensitivity;
+            if (Gamepad.current != null)
+                look += Gamepad.current.rightStick.ReadValue() * gamepadLookSpeed * Time.deltaTime;
+#else
+            if (Cursor.lockState == CursorLockMode.Locked)
+                look = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * 2f;
+#endif
+            return look;
+        }
+
+        public static bool FreeLookHeld()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return (Keyboard.current != null && (Keyboard.current.leftAltKey.isPressed || Keyboard.current.rightAltKey.isPressed)) ||
+                   (Gamepad.current != null && Gamepad.current.rightStickButton.isPressed);
+#else
+            return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+#endif
         }
 
         // 滑鼠鎖定 / Esc 暫停由 DSTNetSession 統一管理（上車時這個元件會關掉，不能在這裡放開滑鼠）
@@ -55,11 +84,10 @@ namespace DUST.Player
 
         void Update()
         {
-            Vector2 move = Vector2.zero, look = Vector2.zero;
+            Vector2 move = Vector2.zero;
             bool sprint = false, jump = false, crouchHeld = false;
 #if ENABLE_INPUT_SYSTEM
             var kb = Keyboard.current;
-            var mouse = Mouse.current;
             if (kb != null)
             {
                 if (kb.wKey.isPressed) move.y += 1;
@@ -70,25 +98,24 @@ namespace DUST.Player
                 jump = kb.spaceKey.wasPressedThisFrame;
                 crouchHeld = kb.leftCtrlKey.isPressed;   // C 是切換第一 / 第三人稱（DSTPlayerView）
             }
-            if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
-                look += mouse.delta.ReadValue() * mouseSensitivity;
             var gp = Gamepad.current;
             if (gp != null)
             {
                 move += gp.leftStick.ReadValue();
-                look += gp.rightStick.ReadValue() * gamepadLookSpeed * Time.deltaTime;
                 sprint |= gp.leftStickButton.isPressed;
                 jump |= gp.buttonSouth.wasPressedThisFrame;
                 crouchHeld |= gp.buttonEast.isPressed;
             }
 #else
             move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-            look = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * 2f;
             sprint = Input.GetKey(KeyCode.LeftShift);
             jump = Input.GetKeyDown(KeyCode.Space);
             crouchHeld = Input.GetKey(KeyCode.LeftControl);
 #endif
-            Look(look);
+            var look = ReadLookInput(mouseSensitivity, gamepadLookSpeed);
+            bool freeLook = _view && FreeLookHeld();
+            if (_view) _view.FreeLook(freeLook, look);
+            if (!freeLook) Look(look);
             Simulate(Vector2.ClampMagnitude(move, 1f), sprint, jump, crouchHeld, Time.deltaTime);
         }
 

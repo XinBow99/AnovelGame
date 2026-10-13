@@ -6858,8 +6858,8 @@ MonoBehaviour:
       time: 0.9
     - name: land
       time: 1.3
-  idle: {fileID: 6408852880359252162, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
-  walk: {fileID: -796095453462332428, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
-  run: {fileID: -7116159092115809270, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
-  sniff: {fileID: -798614400674396377, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
-  alert: {fileID: 4983396421836490469, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
+  idle: {fileID: 3570357112970549660, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
+  walk: {fileID: 3397900291519635203, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
+  run: {fileID: -6493457038465869616, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
+  sniff: {fileID: -7558004188377200172, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
+  alert: {fileID: 40191342020239134, guid: cb8da267945106549b88cea48e2f29eb, type: 3}

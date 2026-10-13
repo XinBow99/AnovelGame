@@ -72,7 +72,7 @@ namespace DUST.Vehicles
             }
         }
 
-        public string ControlsHint => "[F] 下車    [C] 切換視角    [Space] 手煞車";
+        public string ControlsHint => "[F] 下車    [C] 切換視角    [滑鼠] 環顧    [Space] 手煞車";
         public string EnterHint => "[F] 上車";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)
