@@ -34,10 +34,20 @@ namespace DUST.Player
         public float eyeBelowTop = 0.12f;
         public float headForward = 0f;           // 四足：眼睛在身體中心前方
 
+        [Header("Creative")]
+        public float flySpeed = 9f;
+        public float flySprintMultiplier = 3f;
+
         public bool IsGrounded => _cc && _cc.isGrounded;
         public bool IsCrouching => _crouching;
         public bool IsSprinting { get; private set; }
         public float Pitch => _pitch;
+
+        // 作弊 / 創造模式（DSTCommands 設定）。創造模式：連按兩下 Space 切換飛行；飛行時 Space 上升、Ctrl 下降。
+        public bool Creative { get; set; }
+        public bool Flying { get; private set; }
+        public bool NoClip { get; private set; }
+        public float SpeedMultiplier { get; set; } = 1f;
 
         CharacterController _cc;
         DSTPlayerView _view;
@@ -45,6 +55,7 @@ namespace DUST.Player
         float _pitch;
         bool _crouching;
         float _currentHeight;
+        float _lastSpaceTap = -1f;
 
         void Awake()
         {
@@ -82,13 +93,27 @@ namespace DUST.Player
         // 滑鼠鎖定 / Esc 暫停由 DSTNetSession 統一管理（上車時這個元件會關掉，不能在這裡放開滑鼠）
         void OnEnable() => _velocity = Vector3.zero;
 
+        // 上車、上下車動作時元件會關掉：飛行 / 穿牆一律取消（碰撞由 DSTNetPlayer 依是否在車上決定）
+        void OnDisable()
+        {
+            bool wasNoClip = NoClip;
+            Flying = false;
+            NoClip = false;
+            if (wasNoClip && _cc)
+            {
+                var net = GetComponent<DSTNetPlayer>();
+                _cc.enabled = !(net && net.InVehicle);
+            }
+        }
+
         void Update()
         {
             Vector2 move = Vector2.zero;
-            bool sprint = false, jump = false, crouchHeld = false;
+            bool sprint = false, jump = false, crouchHeld = false, upHeld = false;
+            bool typing = DUST.UI.DSTChat.Typing;   // 聊天輸入中：鍵盤是給文字框的
 #if ENABLE_INPUT_SYSTEM
             var kb = Keyboard.current;
-            if (kb != null)
+            if (kb != null && !typing)
             {
                 if (kb.wKey.isPressed) move.y += 1;
                 if (kb.sKey.isPressed) move.y -= 1;
@@ -96,6 +121,7 @@ namespace DUST.Player
                 if (kb.aKey.isPressed) move.x -= 1;
                 sprint = kb.leftShiftKey.isPressed;
                 jump = kb.spaceKey.wasPressedThisFrame;
+                upHeld = kb.spaceKey.isPressed;
                 crouchHeld = kb.leftCtrlKey.isPressed;   // C 是切換第一 / 第三人稱（DSTPlayerView）
             }
             var gp = Gamepad.current;
@@ -104,19 +130,68 @@ namespace DUST.Player
                 move += gp.leftStick.ReadValue();
                 sprint |= gp.leftStickButton.isPressed;
                 jump |= gp.buttonSouth.wasPressedThisFrame;
+                upHeld |= gp.buttonSouth.isPressed;
                 crouchHeld |= gp.buttonEast.isPressed;
             }
 #else
-            move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-            sprint = Input.GetKey(KeyCode.LeftShift);
-            jump = Input.GetKeyDown(KeyCode.Space);
-            crouchHeld = Input.GetKey(KeyCode.LeftControl);
+            if (!typing)
+            {
+                move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+                sprint = Input.GetKey(KeyCode.LeftShift);
+                jump = Input.GetKeyDown(KeyCode.Space);
+                upHeld = Input.GetKey(KeyCode.Space);
+                crouchHeld = Input.GetKey(KeyCode.LeftControl);
+            }
 #endif
             var look = ReadLookInput(mouseSensitivity, gamepadLookSpeed);
             bool freeLook = _view && FreeLookHeld();
             if (_view) _view.FreeLook(freeLook, look);
             if (!freeLook) Look(look);
-            Simulate(Vector2.ClampMagnitude(move, 1f), sprint, jump, crouchHeld, Time.deltaTime);
+
+            // 創造模式：連按兩下 Space 切換飛行
+            if (jump && Creative)
+            {
+                if (Time.time - _lastSpaceTap < 0.3f) { SetFlying(!Flying); _lastSpaceTap = -1f; jump = false; }
+                else _lastSpaceTap = Time.time;
+            }
+
+            if (Flying) Fly(Vector2.ClampMagnitude(move, 1f), sprint, upHeld, crouchHeld, Time.deltaTime);
+            else
+            {
+                // 速度倍率只套在玩家自己的輸入（上車前腳本走過去不受影響）
+                _inputSpeedScale = SpeedMultiplier;
+                Simulate(Vector2.ClampMagnitude(move, 1f), sprint, jump, crouchHeld, Time.deltaTime);
+                _inputSpeedScale = 1f;
+            }
+        }
+        float _inputSpeedScale = 1f;
+
+        public void SetFlying(bool on)
+        {
+            Flying = on;
+            _velocity = Vector3.zero;
+            if (!on) SetNoClip(false);
+        }
+
+        /// <summary>穿牆：只在飛行時有效（關掉碰撞膠囊，直接移動位置）</summary>
+        public void SetNoClip(bool on)
+        {
+            NoClip = on;
+            if (on && !Flying) SetFlying(true);
+            if (_cc) _cc.enabled = !on;
+        }
+
+        void Fly(Vector2 move, bool sprint, bool up, bool down, float dt)
+        {
+            IsSprinting = sprint;
+            // 往看的方向飛（含仰角），Space / Ctrl 直上直下
+            var look = Quaternion.Euler(_pitch, transform.eulerAngles.y, 0f);
+            Vector3 wish = look * Vector3.forward * move.y + transform.right * move.x;
+            wish += Vector3.up * ((up ? 1f : 0f) - (down ? 1f : 0f));
+            wish = Vector3.ClampMagnitude(wish, 1f) * flySpeed * (sprint ? flySprintMultiplier : 1f) * SpeedMultiplier;
+            _velocity = Vector3.Lerp(_velocity, wish, 1f - Mathf.Exp(-8f * dt));
+            if (NoClip || !_cc.enabled) transform.position += _velocity * dt;
+            else _cc.Move(_velocity * dt);
         }
 
         public void Look(Vector2 delta)
@@ -132,7 +207,7 @@ namespace DUST.Player
             UpdateCrouch(crouchHeld, dt);
 
             IsSprinting = !_crouching && sprint && move.y > 0.1f;
-            float speed = _crouching ? crouchSpeed : (IsSprinting ? sprintSpeed : walkSpeed);
+            float speed = (_crouching ? crouchSpeed : (IsSprinting ? sprintSpeed : walkSpeed)) * _inputSpeedScale;
             Vector3 wish = (transform.right * move.x + transform.forward * move.y) * speed;
             Vector3 horiz = new Vector3(_velocity.x, 0f, _velocity.z);
             float accel = _cc.isGrounded ? groundAcceleration : airAcceleration;

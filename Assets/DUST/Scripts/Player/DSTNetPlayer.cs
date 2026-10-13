@@ -28,6 +28,8 @@ namespace DUST.Player
         readonly NetworkVariable<bool> _crouching = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         readonly NetworkVariable<bool> _sprinting = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
         readonly NetworkVariable<bool> _inVehicle = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        // 只有房主自己的角色用到：房主有沒有開放作弊指令給其他人（/cheats on）
+        readonly NetworkVariable<bool> _cheatsForAll = new NetworkVariable<bool>(false);
 
         DSTPlayerController _pc;
         DSTPlayerInteractor _interactor;
@@ -63,6 +65,10 @@ namespace DUST.Player
             new Color(0.45f, 0.12f, 0.55f), new Color(0.05f, 0.50f, 0.50f), new Color(0.90f, 0.40f, 0.65f), new Color(0.15f, 0.15f, 0.15f),
         };
 
+        public static Color ColorOf(ulong clientId) => ScarfColors[(int)(clientId % (ulong)ScarfColors.Length)];
+        public static string NameOf(ulong clientId) => $"玩家 {clientId + 1}";
+        public string DisplayName => NameOf(OwnerClientId);
+
         void TintScarf()
         {
             foreach (var r in GetComponentsInChildren<Renderer>(true))
@@ -70,7 +76,7 @@ namespace DUST.Player
                 if (!r.name.Contains("Scarf")) continue;
                 var mpb = new MaterialPropertyBlock();
                 r.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", ScarfColors[(int)(OwnerClientId % (ulong)ScarfColors.Length)]);
+                mpb.SetColor("_BaseColor", ColorOf(OwnerClientId));
                 r.SetPropertyBlock(mpb);
             }
         }
@@ -217,6 +223,68 @@ namespace DUST.Player
                 _cc.center = Vector3.up * (_remoteHeight * 0.5f);
             }
         }
+
+        // ------------------------------------------------------------------ 聊天 / 作弊指令
+        public const int MaxChatLength = 120;
+
+        /// <summary>自己這台電腦可以用作弊指令嗎：房主（單人）一律可以；其他人要房主 /cheats on</summary>
+        public static bool CheatsAllowed
+        {
+            get
+            {
+                var nm = NetworkManager.Singleton;
+                if (!nm || nm.IsServer) return true;
+                foreach (var p in All)
+                    if (p && p.OwnerClientId == NetworkManager.ServerClientId) return p._cheatsForAll.Value;
+                return false;
+            }
+        }
+
+        /// <summary>房主：開放 / 關閉其他玩家的作弊指令</summary>
+        public static bool SetCheatsForAll(bool on)
+        {
+            var nm = NetworkManager.Singleton;
+            if (!nm || !nm.IsServer || Local == null) return false;
+            Local._cheatsForAll.Value = on;
+            return true;
+        }
+
+        public void SendChat(string text)
+        {
+            if (!IsOwner || string.IsNullOrWhiteSpace(text)) return;
+            ChatRpc(text.Length > MaxChatLength ? text.Substring(0, MaxChatLength) : text);
+        }
+
+        [Rpc(SendTo.Server)]
+        void ChatRpc(string text, RpcParams rpc = default)
+        {
+            if (rpc.Receive.SenderClientId != OwnerClientId || string.IsNullOrWhiteSpace(text)) return;
+            if (text.Length > MaxChatLength) text = text.Substring(0, MaxChatLength);
+            ChatBroadcastRpc(text);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void ChatBroadcastRpc(string text) => DUST.UI.DSTChat.Receive(DisplayName, ColorOf(OwnerClientId), text);
+
+        /// <summary>/time：時間是主機在算，交給主機改</summary>
+        public void RequestSetHour(float hour)
+        {
+            if (IsOwner) SetHourRpc(hour);
+        }
+
+        [Rpc(SendTo.Server)]
+        void SetHourRpc(float hour, RpcParams rpc = default)
+        {
+            ulong sender = rpc.Receive.SenderClientId;
+            if (sender != NetworkManager.ServerClientId && !HostAllowsCheats()) return;
+            if (DSTTimeOfDay.Instance) DSTTimeOfDay.Instance.SetHour(hour);
+            NoticeRpc($"{NameOf(sender)} 把時間調到 {Mathf.FloorToInt(hour):00}:{Mathf.FloorToInt((hour % 1f) * 60f):00}");
+        }
+
+        bool HostAllowsCheats() => Local != null && Local._cheatsForAll.Value;
+
+        [Rpc(SendTo.Everyone)]
+        void NoticeRpc(string text) => DUST.UI.DSTChat.System(text);
 
         // 揮拳打到東西：交給主機判定，動物的血量只在主機上算
         public void Punch(IDSTDamageable target, float damage)

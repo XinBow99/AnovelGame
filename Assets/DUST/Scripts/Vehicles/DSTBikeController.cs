@@ -105,7 +105,7 @@ namespace DUST.Vehicles
             }
             float steer = 0f, throttle = 0f, brake = 0f;
 #if ENABLE_INPUT_SYSTEM
-            var kb = Keyboard.current;
+            var kb = DUST.UI.DSTChat.Typing ? null : Keyboard.current;   // 聊天打字中不吃鍵盤
             if (kb != null)
             {
                 if (kb.wKey.isPressed) throttle = 1f;

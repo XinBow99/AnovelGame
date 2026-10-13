@@ -44,6 +44,7 @@ namespace DUST.Player
 
         static bool AttackPressed()
         {
+            if (DUST.UI.DSTChat.ConsumesKeys) return false;   // 聊天框在用鍵盤
 #if ENABLE_INPUT_SYSTEM
             return (Mouse.current != null && Cursor.lockState == CursorLockMode.Locked && Mouse.current.leftButton.wasPressedThisFrame) ||
                    (Gamepad.current != null && Gamepad.current.rightTrigger.wasPressedThisFrame);
@@ -76,6 +77,7 @@ namespace DUST.Player
 
         public static bool InteractPressed()
         {
+            if (DUST.UI.DSTChat.ConsumesKeys) return false;   // 聊天框在用鍵盤
             if (_consumedFrame == Time.frameCount) return false;
 #if ENABLE_INPUT_SYSTEM
             return (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame) ||

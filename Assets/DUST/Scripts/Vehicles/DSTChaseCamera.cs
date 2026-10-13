@@ -51,7 +51,7 @@ namespace DUST.Vehicles
         {
             if (!target) return;
 #if ENABLE_INPUT_SYSTEM
-            if ((Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame) ||
+            if ((Keyboard.current != null && !DUST.UI.DSTChat.ConsumesKeys && Keyboard.current.cKey.wasPressedThisFrame) ||
                 (Gamepad.current != null && Gamepad.current.buttonNorth.wasPressedThisFrame))
                 cockpit = !cockpit;
 #else

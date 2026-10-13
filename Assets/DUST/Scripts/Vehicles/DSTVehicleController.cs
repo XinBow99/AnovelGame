@@ -144,7 +144,7 @@ namespace DUST.Vehicles
             float v = 0f, h = 0f;
             bool hb = false, reset = false;
 #if ENABLE_INPUT_SYSTEM
-            var kb = Keyboard.current;
+            var kb = DUST.UI.DSTChat.Typing ? null : Keyboard.current;   // 聊天打字中不吃鍵盤
             if (kb != null)
             {
                 if (kb.wKey.isPressed || kb.upArrowKey.isPressed) v += 1f;

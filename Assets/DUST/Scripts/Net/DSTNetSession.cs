@@ -85,6 +85,7 @@ namespace DUST.Net
 
         static bool EscPressed()
         {
+            if (DUST.UI.DSTChat.ConsumesKeys) return false;   // 聊天框在用鍵盤
 #if ENABLE_INPUT_SYSTEM
             return Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
 #else

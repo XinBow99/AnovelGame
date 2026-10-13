@@ -1,0 +1,171 @@
+using System;
+using System.Globalization;
+using DUST.Player;
+using DUST.World;
+using Unity.Netcode;
+using UnityEngine;
+
+namespace DUST.UI
+{
+    // 聊天框裡的 / 指令。/help、/pos、/seed、/clear 誰都能用；其他是作弊指令：
+    // 房主（單人）一律可以，其他玩家要房主先 /cheats on。
+    public static class DSTCommands
+    {
+        static readonly string[] HelpLines =
+        {
+            "/help　指令列表",
+            "/creative [on|off]　創造模式（連按兩下 Space 飛行，Space 上升、Ctrl 下降、Shift 加速）",
+            "/fly　切換飛行　　/noclip　飛行時穿牆",
+            "/speed <倍率>　移動速度（不填 = 恢復 1）",
+            "/tp <x> <z> | /tp <x> <y> <z> | /tp <玩家編號>　傳送",
+            "/time <0-24 | 6:30 | day | noon | night | midnight>　調整時間",
+            "/pos　目前座標　　/seed　世界種子　　/clear　清除聊天",
+            "/cheats on|off　（房主）開放作弊指令給其他玩家",
+        };
+
+        public static void Run(string line)
+        {
+            var args = line.Substring(1).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (args.Length == 0) return;
+            string cmd = args[0].ToLowerInvariant();
+            var me = DSTNetPlayer.Local;
+            if (!me) return;
+            var pc = me.Controller;
+
+            // 一般指令
+            switch (cmd)
+            {
+                case "help": case "?":
+                    foreach (var h in HelpLines) DSTChat.System(h);
+                    return;
+                case "pos":
+                    var p = me.transform.position;
+                    DSTChat.System($"座標 {p.x:0.0}, {p.y:0.0}, {p.z:0.0}　面向 {me.transform.eulerAngles.y:0}°");
+                    return;
+                case "seed":
+                    var world = DSTWorld.Instance;
+                    DSTChat.System(world && world.IsRandom ? $"世界種子 {world.Seed}" : "目前是遺跡二地圖（沒有種子）");
+                    return;
+                case "clear":
+                    DSTChat.Clear();
+                    return;
+            }
+
+            if (!DSTNetPlayer.CheatsAllowed) { DSTChat.System("作弊指令沒有開放（房主可以輸入 /cheats on）"); return; }
+
+            switch (cmd)
+            {
+                case "cheats":
+                    if (!NetworkManager.Singleton || !NetworkManager.Singleton.IsServer) { DSTChat.System("只有房主可以切換"); return; }
+                    bool allow = args.Length < 2 || args[1] == "on" || args[1] == "1";
+                    DSTNetPlayer.SetCheatsForAll(allow);
+                    DSTChat.System(allow ? "已開放作弊指令給所有玩家" : "已關閉其他玩家的作弊指令");
+                    return;
+
+                case "creative": case "gm":
+                    pc.Creative = Toggle(args, pc.Creative);
+                    if (!pc.Creative && pc.Flying) pc.SetFlying(false);
+                    DSTChat.System(pc.Creative ? "創造模式：連按兩下 Space 飛行" : "創造模式關閉");
+                    return;
+                case "survival":
+                    pc.Creative = false;
+                    if (pc.Flying) pc.SetFlying(false);
+                    DSTChat.System("創造模式關閉");
+                    return;
+
+                case "fly":
+                    if (!OnFoot(me)) return;
+                    pc.SetFlying(Toggle(args, pc.Flying));
+                    DSTChat.System(pc.Flying ? "飛行：Space 上升、Ctrl 下降、Shift 加速" : "停止飛行");
+                    return;
+                case "noclip":
+                    if (!OnFoot(me)) return;
+                    pc.SetNoClip(Toggle(args, pc.NoClip));
+                    DSTChat.System(pc.NoClip ? "穿牆飛行" : "穿牆關閉（仍在飛行，/fly 落地）");
+                    return;
+
+                case "speed":
+                    float mult = 1f;
+                    if (args.Length >= 2 && !TryFloat(args[1], out mult)) { DSTChat.System("用法：/speed 2"); return; }
+                    pc.SpeedMultiplier = Mathf.Clamp(mult, 0.1f, 10f);
+                    DSTChat.System($"移動速度 ×{pc.SpeedMultiplier:0.##}");
+                    return;
+
+                case "tp":
+                    if (!OnFoot(me)) return;
+                    Teleport(me, args);
+                    return;
+
+                case "time":
+                    if (args.Length < 2 || !TryHour(args[1], out float hour)) { DSTChat.System("用法：/time 6、/time 18:30、/time night"); return; }
+                    me.RequestSetHour(hour);
+                    return;
+            }
+            DSTChat.System($"沒有這個指令：/{cmd}（/help 看全部）");
+        }
+
+        static bool Toggle(string[] args, bool current)
+        {
+            if (args.Length < 2) return !current;
+            var a = args[1].ToLowerInvariant();
+            return a == "on" || a == "1" || a == "true";
+        }
+
+        static bool OnFoot(DSTNetPlayer me)
+        {
+            if (!me.InVehicle && me.Controller.enabled) return true;
+            DSTChat.System("先下車再用");
+            return false;
+        }
+
+        static bool TryFloat(string s, out float v) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);
+
+        static bool TryHour(string s, out float hour)
+        {
+            switch (s.ToLowerInvariant())
+            {
+                case "day": case "morning": hour = 8f; return true;
+                case "noon": hour = 12f; return true;
+                case "evening": case "sunset": hour = 19f; return true;
+                case "night": hour = 22f; return true;
+                case "midnight": hour = 0f; return true;
+            }
+            var hm = s.Split(':');
+            if (hm.Length == 2 && int.TryParse(hm[0], out int h) && int.TryParse(hm[1], out int m)) { hour = h + m / 60f; return h >= 0 && h <= 24 && m >= 0 && m < 60; }
+            return TryFloat(s, out hour) && hour >= 0f && hour <= 24f;
+        }
+
+        static void Teleport(DSTNetPlayer me, string[] args)
+        {
+            var pc = me.Controller;
+            Vector3 target;
+            float yaw = me.transform.eulerAngles.y;
+            if (args.Length == 2 && int.TryParse(args[1], out int n))
+            {
+                // 傳送到某個玩家旁邊（玩家編號 = 聊天裡顯示的「玩家 N」）
+                DSTNetPlayer other = null;
+                foreach (var p in DSTNetPlayer.All) if (p && p.OwnerClientId + 1 == (ulong)n) other = p;
+                if (!other || other == me) { DSTChat.System($"找不到玩家 {n}"); return; }
+                target = other.transform.position - other.transform.forward * 1.2f + Vector3.up * 0.3f;
+                yaw = other.transform.eulerAngles.y;
+            }
+            else if (args.Length == 3 && TryFloat(args[1], out float x) && TryFloat(args[2], out float z))
+                target = new Vector3(x, GroundY(x, z) + 0.1f, z);
+            else if (args.Length == 4 && TryFloat(args[1], out x) && TryFloat(args[2], out float y) && TryFloat(args[3], out z))
+                target = new Vector3(x, y, z);
+            else { DSTChat.System("用法：/tp 10 20、/tp 10 5 20、/tp 2"); return; }
+
+            bool noclip = pc.NoClip;
+            pc.Teleport(target, yaw);
+            if (noclip) pc.SetNoClip(true);       // Teleport 會把碰撞打開
+            DSTChat.System($"傳送到 {target.x:0.0}, {target.y:0.0}, {target.z:0.0}");
+        }
+
+        static float GroundY(float x, float z)
+        {
+            if (Physics.Raycast(new Vector3(x, 500f, z), Vector3.down, out var hit, 1000f, ~0, QueryTriggerInteraction.Ignore)) return hit.point.y;
+            var world = DSTWorld.Instance;
+            return world && world.IsRandom ? world.GroundHeight(x, z) : 0f;
+        }
+    }
+}

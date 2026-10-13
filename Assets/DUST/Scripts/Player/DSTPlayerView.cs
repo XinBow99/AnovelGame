@@ -85,7 +85,7 @@ namespace DUST.Player
         {
             if (Forced || !_pc || !_pc.enabled) return;
 #if ENABLE_INPUT_SYSTEM
-            if ((Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame) ||
+            if ((Keyboard.current != null && !DUST.UI.DSTChat.ConsumesKeys && Keyboard.current.cKey.wasPressedThisFrame) ||
                 (Gamepad.current != null && Gamepad.current.buttonNorth.wasPressedThisFrame))
                 ThirdPerson = !ThirdPerson;
 #else
