@@ -64,15 +64,27 @@ namespace DUST.Animals
             Stretch(g.tailLen, "Tail2", "Tail3", "Tail4");
             if (bones.TryGetValue("Head", out var head)) head.localScale = Vector3.one * g.headSize;
 
-            // 腿變長了：整隻墊高，讓最低的腳趾剛好踩在地上
-            float minY = float.MaxValue;
-            foreach (var n in new[] { "Toes_L", "Toes_R", "HToes_L", "HToes_R" })
-                if (bones.TryGetValue(n, out var toe)) minY = Mathf.Min(minY, parent.InverseTransformPoint(toe.position).y);
-            if (minY < float.MaxValue) inst.transform.localPosition = new Vector3(0f, -minY + 0.009f * g.size, 0f);   // 腳趾骨在肉墊裡面，墊高一點皮膚才剛好碰地
-
-            var anim = inst.GetComponent<Animator>() ?? inst.AddComponent<Animator>();
+            // 先套一幀待機動畫：遊戲裡站著的是待機姿勢，不是綁定姿勢（腿彎的程度不一樣）
+            var anim = inst.GetComponent<Animator>();
+            if (!anim) anim = inst.AddComponent<Animator>();
             anim.runtimeAnimatorController = controller;
             anim.applyRootMotion = false;
+            anim.Rebind();
+            anim.Update(0f);
+
+            // 腿變長了：整隻墊高，讓「選中零件的皮膚最低點」剛好碰地（量實際網格，零件改造型也不用調）
+            float minY = float.MaxValue;
+            var baked = new Mesh();
+            foreach (var smr in smrs)
+            {
+                if (!want.Contains(PartOf(smr))) continue;
+                smr.BakeMesh(baked, false);
+                var toParent = parent.worldToLocalMatrix * smr.transform.localToWorldMatrix;
+                foreach (var v in baked.vertices) minY = Mathf.Min(minY, toParent.MultiplyPoint3x4(v).y);
+            }
+            Object.Destroy(baked);
+            if (minY < float.MaxValue) inst.transform.localPosition = new Vector3(0f, -minY, 0f);
+
             anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             return new CreatureRig { root = inst.transform, animator = anim, head = head, restPosition = inst.transform.localPosition };

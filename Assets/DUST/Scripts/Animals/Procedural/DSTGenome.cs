@@ -174,8 +174,8 @@ namespace DUST.Animals
             if (kind == DSTWorldGen.RegionKind.DuneSea) { val = F(0.7f, 0.9f); sat *= 0.75f; }
             if (kind == DSTWorldGen.RegionKind.Mesa) { hue = F(0.0f, 0.05f); val = F(0.45f, 0.7f); sat = F(0.35f, 0.6f); }
             double morph = r.NextDouble();
-            if (morph < 0.2 || g.body == "Stoneback") { sat *= 0.15f; val = F(0.45f, 0.75f); }   // 灰色系（岩背一律灰）
-            else if (morph < 0.28) { val *= 0.6f; sat *= 0.7f; }                                   // 少數深色型
+            if (morph < 0.2 || g.body == "Stoneback") { sat *= 0.15f; val = F(0.55f, 0.8f); }    // 灰色系（岩背一律灰）
+            else if (morph < 0.25) { val *= 0.6f; sat *= 0.7f; }                                   // 少數深色型
             g.coat = Color.HSVToRGB(hue, sat, val);
             g.belly = Color.HSVToRGB(hue, sat * F(0.1f, 0.6f), Mathf.Min(0.95f, val + F(0.05f, 0.45f)));
             g.mark = Color.HSVToRGB(Mathf.Repeat(hue + F(-0.03f, 0.02f), 1f), Mathf.Min(1f, sat + 0.1f), val * F(0.15f, 0.4f));
