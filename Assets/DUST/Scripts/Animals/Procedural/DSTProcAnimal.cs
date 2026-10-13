@@ -12,7 +12,8 @@ namespace DUST.Animals
     {
         public GameObject kit;                          // SK_DST_CreatureKit（Blender 零件庫）
         public RuntimeAnimatorController controller;    // AC_CreatureKit（Speed / Graze / Alert）
-        public Material template;                       // HDRP/Lit 範本材質（毛色貼圖執行時產生）
+        public Material template;                       // HDRP/Lit 範本材質（舊的毛色貼圖模式）
+        public Material skin;                           // M_DST_AlienSkin（程序外皮 shader）；有指定就用它，沒有才退回毛色貼圖
 
         readonly NetworkVariable<int> _key = new NetworkVariable<int>();
         readonly NetworkVariable<byte> _pose = new NetworkVariable<byte>();
@@ -63,7 +64,7 @@ namespace DUST.Animals
             Genome = DSTGenome.Get(key);
             var snap = GetComponent<DSTGroundSnap>();
             if (!snap) snap = gameObject.AddComponent<DSTGroundSnap>();
-            _rig = DSTCreatureAssembler.Build(Genome, snap.EnsurePivot(), kit, controller, template);
+            _rig = DSTCreatureAssembler.Build(Genome, snap.EnsurePivot(), kit, controller, template, skin);
             // 同一物種的個體大小有一點差異（由連線 ID 決定，每台電腦一樣）
             float s = 1f + ((IsSpawned ? (int)(NetworkObjectId % 17) : 8) - 8) * 0.012f;
             _rig.root.localScale *= s;

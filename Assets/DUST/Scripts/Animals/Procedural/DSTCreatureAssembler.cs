@@ -21,8 +21,11 @@ namespace DUST.Animals
 
         sealed class Mats { public Material coat, horn, eye; }
         static readonly Dictionary<int, Mats> _mats = new Dictionary<int, Mats>();
+        static readonly Dictionary<int, Material> _skins = new Dictionary<int, Material>();
+        static readonly int SeedLoId = Shader.PropertyToID("_SeedLo");
+        static readonly int SeedHiId = Shader.PropertyToID("_SeedHi");
 
-        public static CreatureRig Build(DSTGenome g, Transform parent, GameObject kit, RuntimeAnimatorController controller, Material template)
+        public static CreatureRig Build(DSTGenome g, Transform parent, GameObject kit, RuntimeAnimatorController controller, Material template, Material skin = null)
         {
             var inst = Object.Instantiate(kit, parent, false);
             inst.name = "Visual";
@@ -36,7 +39,8 @@ namespace DUST.Animals
             if (!string.IsNullOrEmpty(g.tail)) want.Add("Tail_" + g.tail);
             if (!string.IsNullOrEmpty(g.horns)) want.Add("Horns_" + g.horns);
             if (g.eyes) want.Add("Eyes_Canid");
-            var m = MatsFor(g, template);
+            var sk = skin ? SkinFor(g, skin) : null;
+            var m = sk ? null : MatsFor(g, template);
             var smrs = inst.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             string PartOf(SkinnedMeshRenderer s) => s.name.StartsWith(Prefix) ? s.name.Substring(Prefix.Length) : s.name;
             // 零件庫還沒有這個零件（例如舊版 kit）：身體 / 頭至少要留一個
@@ -50,7 +54,7 @@ namespace DUST.Animals
             {
                 string part = PartOf(smr);
                 if (!want.Contains(part)) { Object.Destroy(smr.gameObject); continue; }
-                smr.sharedMaterial = part.StartsWith("Eyes") ? m.eye : part.StartsWith("Horns") ? m.horn : m.coat;
+                smr.sharedMaterial = sk ? sk : part.StartsWith("Eyes") ? m.eye : part.StartsWith("Horns") ? m.horn : m.coat;
                 smr.updateWhenOffscreen = false;
             }
 
@@ -90,7 +94,20 @@ namespace DUST.Animals
             return new CreatureRig { root = inst.transform, animator = anim, head = head, restPosition = inst.transform.localPosition };
         }
 
-        // ------------------------------------------------------------------ 毛色（每個物種一套材質）
+        // ------------------------------------------------------------------ 程序外皮：每個物種一個材質實例（不用 MaterialPropertyBlock，SRP Batcher 才能照常合批）
+        // 種子 = 物種 key 拆成兩個 16 位元（shader 用 float 收，32 位元整數直接放會掉精度）；不動基因的亂數
+        static Material SkinFor(DSTGenome g, Material skin)
+        {
+            if (_skins.TryGetValue(g.key, out var mat) && mat) return mat;
+            uint k = unchecked((uint)g.key);
+            mat = new Material(skin) { name = "M_Gen_Skin_" + g.key };
+            mat.SetFloat(SeedLoId, k & 0xffff);
+            mat.SetFloat(SeedHiId, k >> 16);
+            _skins[g.key] = mat;
+            return mat;
+        }
+
+        // ------------------------------------------------------------------ 毛色（舊模式：每個物種一套材質）
         static Mats MatsFor(DSTGenome g, Material template)
         {
             if (_mats.TryGetValue(g.key, out var m) && m.coat) return m;

@@ -22,6 +22,8 @@ namespace DUST.EditorTools
         const string ControllerPath = KitDir + "/AC_CreatureKit.controller";
         const string FurDetailPath = KitDir + "/T_DST_FurDetail.png";
         const string MaterialPath = Dir + "/M_DST_ProcCreature.mat";
+        const string SkinGraphPath = KitDir + "/SG_DST_AlienSkin.shadergraph";
+        const string SkinMaterialPath = Dir + "/M_DST_AlienSkin.mat";
         const string PrefabPath = Dir + "/PF_Animal_Procedural.prefab";
         const string LocoFbx = "Assets/DUST/Player/ManedWolf/SK_DST_Player_ManedWolf_Locomotion.fbx";
 
@@ -34,6 +36,7 @@ namespace DUST.EditorTools
             SetupKitImporter();
             var controller = BuildController();
             var mat = BuildMaterial();
+            var skin = BuildSkinMaterial();
 
             var root = new GameObject("PF_Animal_Procedural");
             root.AddComponent<NetworkObject>();
@@ -50,6 +53,7 @@ namespace DUST.EditorTools
             root.AddComponent<DSTAnimal>();
             var pa = root.AddComponent<DSTProcAnimal>();
             pa.template = mat;
+            pa.skin = skin;
             pa.kit = AssetDatabase.LoadAssetAtPath<GameObject>(KitPath);
             pa.controller = controller;
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
@@ -84,6 +88,9 @@ namespace DUST.EditorTools
             imp.importAnimation = false;
             imp.materialImportMode = ModelImporterMaterialImportMode.None;
             imp.importCameras = false; imp.importLights = false;
+            // 外皮 shader 讀 UV1 / UV2（原始座標、零件欄位）和頂點色：不能壓縮，也不能讓 Unity 拿 UV1 去產生光照貼圖 UV
+            imp.meshCompression = ModelImporterMeshCompression.Off;
+            imp.generateSecondaryUV = false;
             imp.SaveAndReimport();
         }
 
@@ -183,6 +190,24 @@ namespace DUST.EditorTools
             ti.wrapMode = TextureWrapMode.Repeat;
             ti.SaveAndReimport();
             return AssetDatabase.LoadAssetAtPath<Texture2D>(FurDetailPath);
+        }
+
+        // 程序外皮（SG_DST_AlienSkin：DSTAlienSkin.hlsl 接 HDRP Lit）：所有零件共用，物種 key 在執行時寫進 _SeedLo / _SeedHi
+        static Material BuildSkinMaterial()
+        {
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>(SkinGraphPath);
+            if (!shader) { Debug.LogWarning("找不到 " + SkinGraphPath + "，沿用舊的毛色貼圖"); return null; }
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(SkinMaterialPath);
+            if (!mat)
+            {
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, SkinMaterialPath);
+            }
+            mat.shader = shader;
+            mat.SetFloat("_Detail", 1f);
+            HDMaterial.ValidateMaterial(mat);
+            EditorUtility.SetDirty(mat);
+            return mat;
         }
 
         static Material BuildMaterial()
