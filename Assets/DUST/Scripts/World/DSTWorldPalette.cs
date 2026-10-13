@@ -26,6 +26,7 @@ namespace DUST.World
         public GameObject wallGate;
         public GameObject wallCorner;
         public GameObject[] wallHalf;        // 2 m 寬的牆，用來做倒塌一半的牆
+        public Material inscription;         // 遺跡石碑的刻文（HDRP/Decal，DSTInscription）
 
         [Header("Settlements")]
         public Material road;                // 聚落街道（夯實的土）

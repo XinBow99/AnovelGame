@@ -15018,6 +15018,73 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: f3592be6751bf1645a847597b9bb3cae, type: 3}
   m_PrefabInstance: {fileID: 245781617}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &246263792
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 246263795}
+  - component: {fileID: 246263794}
+  - component: {fileID: 246263793}
+  m_Layer: 0
+  m_Name: Clockwork
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &246263793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 246263792}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63d24c9969e49bf4f966b6cb3e285369, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTSkyEvents
+  streakMaterial: {fileID: 2100000, guid: 38ff1e47d15256246b2677fdcdd3e8cb, type: 2}
+  meteoriteMaterial: {fileID: 2100000, guid: 10f7f2a6a03f28b46955338ade95276c, type: 2}
+  scorchMaterial: {fileID: 2100000, guid: 5aaeee8ccea526d499301a06382543cd, type: 2}
+  skyDistance: 900
+  beaconHeight: 60
+--- !u!114 &246263794
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 246263792}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50eaf4afa6e86b445914f30edd0ac99d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTWeather
+  dustMaterial: {fileID: 2100000, guid: 77457d745441f624188c5b051f503c37, type: 2}
+  stormFogDistance: 14
+  stormFogColor: {r: 0.86, g: 0.62, b: 0.38, a: 1}
+  stormSunDim: 0.15
+  windSpeed: 14
+--- !u!4 &246263795
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 246263792}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &246493290
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -143180,3 +143247,4 @@ SceneRoots:
   - {fileID: 905559646}
   - {fileID: 801644406}
   - {fileID: 520760433}
+  - {fileID: 246263795}

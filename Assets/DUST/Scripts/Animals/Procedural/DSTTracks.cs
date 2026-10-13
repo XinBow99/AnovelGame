@@ -67,6 +67,7 @@ namespace DUST.Animals
             double now = DSTMigration.Now;
             float r2 = viewRange * viewRange;
             _prints.Clear();
+            double stormEnd = DSTClockwork.LastStormEnd(now);     // 沙暴吹過，之前的腳印都平了
 
             // ---- 遷徙路線往回推算
             DSTMigration.Near(v, viewRange, _bands);
@@ -79,7 +80,7 @@ namespace DUST.Animals
                 float stride = StrideOf(g), size = SizeOf(g), gait = GaitWidth(g);
                 int cell = CellOf(g);
                 int members = Mathf.Min(b.count, 4);
-                b.Walked(now - life, now, (s0, s1, t0, hPerM) =>
+                b.Walked(System.Math.Max(now - life, stormEnd), now, (path, s0, s1, t0, hPerM) =>
                 {
                     for (int m = 0; m < members; m++)
                     {
@@ -90,7 +91,7 @@ namespace DUST.Animals
                         for (int k = k0; k <= k1; k++)
                         {
                             float s = k * stride;
-                            var c = b.PointAt(s, out var dir);
+                            var c = path.PointAt(s, out var dir);
                             var right = new Vector3(dir.z, 0f, -dir.x);
                             // 每個腳印一點點不一樣（角度、大小、位置），用固定的雜湊，畫面才不會閃
                             int salt = (int)b.id * 31 + m;
@@ -114,7 +115,7 @@ namespace DUST.Animals
             foreach (var (p, t) in _live)
             {
                 float dx = p.pos.x - v.x, dz = p.pos.z - v.z, d2 = dx * dx + dz * dz;
-                if (d2 > r2) continue;
+                if (d2 > r2 || t < stormEnd) continue;
                 float fade = 1f - (float)((now - t) / lifeHours);
                 if (fade <= 0f) continue;
                 var q = p; q.fade = fade; q.d2 = d2;

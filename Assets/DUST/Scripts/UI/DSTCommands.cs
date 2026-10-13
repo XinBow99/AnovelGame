@@ -20,7 +20,7 @@ namespace DUST.UI
             "/tp <x> <z> | /tp <x> <y> <z> | /tp <玩家編號>　傳送",
             "/time <0-24 | 6:30 | day | noon | night | midnight>　調整時間",
             "/pos　目前座標　　/seed　世界種子　　/clear　清除聊天",
-            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群　　/herds　附近動物群在哪、幾點出門",
+            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群　　/herds　附近動物群在哪、幾點出門　　/events　接下來幾天的沙暴、流星、集體遷徙　　/wait <小時>　時間往前跳",
             "/cheats on|off　（房主）開放作弊指令給其他玩家",
         };
 
@@ -121,6 +121,36 @@ namespace DUST.UI
                     me.RequestSetHour(hour);
                     return;
 
+                case "wait":
+                    if (args.Length < 2 || !TryFloat(args[1], out float wait) || wait <= 0f) { DSTChat.System("用法：/wait 3（往前 3 小時）、/wait 24（明天同一時間）"); return; }
+                    me.RequestAdvance(wait);
+                    return;
+
+                case "events":
+                {
+                    // 發條沙漠：今天和接下來幾天的事件表
+                    double t = DSTClockwork.Now;
+                    int today = DSTClockwork.DayOf(t);
+                    DSTChat.System($"現在：第 {today + 1} 天 {Clock(t)}");
+                    for (int d = today; d < today + 4; d++)
+                    {
+                        var parts = new System.Collections.Generic.List<string>();
+                        if (DSTClockwork.StormOn(d, out float st, out float du)) parts.Add($"沙暴 {Clock(d * 24.0 + st)}~{Clock(d * 24.0 + st + du)}");
+                        if (DSTClockwork.Meteorite(d, out double land, out var where))
+                            parts.Add($"流星雨 21:00~03:00，隕石 {Clock(land)} 落在 ({where.x:0}, {where.y:0})");
+                        if (DUST.Animals.DSTMigration.Available)
+                        {
+                            var bands = new System.Collections.Generic.List<DUST.Animals.DSTBand>();
+                            DUST.Animals.DSTMigration.Near(me.transform.position, 300f, bands);
+                            var names = new System.Collections.Generic.HashSet<string>();
+                            foreach (var b in bands) if (b.IsMassDay(d)) names.Add(b.genome.name);
+                            if (names.Count > 0) parts.Add("集體遷徙：" + string.Join("、", names));
+                        }
+                        DSTChat.System($"第 {d + 1} 天：" + (parts.Count > 0 ? string.Join("；", parts) : "平靜"));
+                    }
+                    return;
+                }
+
                 case "herds":
                     if (!DUST.Animals.DSTMigration.Available) { DSTChat.System("只有隨機世界有遷徙"); return; }
                     var herds = new System.Collections.Generic.List<DUST.Animals.DSTBand>();
@@ -140,6 +170,13 @@ namespace DUST.UI
                     return;
             }
             DSTChat.System($"沒有這個指令：/{cmd}（/help 看全部）");
+        }
+
+        static string Clock(double t)
+        {
+            double h = t - System.Math.Floor(t / 24.0) * 24.0;
+            int hh = (int)h, mm = (int)((h - hh) * 60.0);
+            return $"{hh:00}:{mm:00}";
         }
 
         static string Compass(float deg)

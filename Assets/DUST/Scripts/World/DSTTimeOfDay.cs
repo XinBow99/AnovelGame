@@ -100,6 +100,12 @@ namespace DUST.World
             SetTotal(t);
         }
 
+        /// <summary>主機：時間往前跳幾小時（/wait）</summary>
+        public void Advance(double hours)
+        {
+            if (hours > 0) SetTotal(CurrentTotal() + hours);
+        }
+
         void SetTotal(double total)
         {
             if (IsSpawned)
@@ -129,23 +135,28 @@ namespace DUST.World
         }
 
         // ------------------------------------------------------------------ 光線
-        void ApplyLighting()
+        /// <summary>某個鐘點太陽的仰角與光線水平方向（光往 Euler(仰角, yaw) 的前方照）：遺跡刻文用它預算哪個時刻光會斜斜掃過碑面</summary>
+        public void SunAngles(float hour, out float elevation, out float yaw)
         {
             float dayLen = sunsetHour - sunriseHour;
-            float elevation, yaw;
-            if (Hour >= sunriseHour && Hour <= sunsetHour)
+            if (hour >= sunriseHour && hour <= sunsetHour)
             {
-                float t = (Hour - sunriseHour) / dayLen;                 // 0 日出 → 1 日落
+                float t = (hour - sunriseHour) / dayLen;                 // 0 日出 → 1 日落
                 elevation = sunMaxElevation * Mathf.Sin(t * Mathf.PI);
                 yaw = sunNoonYaw + (t - 0.5f) * 180f;
             }
             else
             {
                 float nightLen = 24f - dayLen;
-                float t = Mathf.Repeat(Hour - sunsetHour, 24f) / nightLen; // 0 日落 → 1 日出
+                float t = Mathf.Repeat(hour - sunsetHour, 24f) / nightLen; // 0 日落 → 1 日出
                 elevation = -30f * Mathf.Sin(t * Mathf.PI);
                 yaw = sunNoonYaw + 90f + t * 180f;
             }
+        }
+
+        void ApplyLighting()
+        {
+            SunAngles(Hour, out float elevation, out float yaw);
             SunElevation = elevation;
 
             // 0 = 夜、1 = 白天；天空在日落後 8° 內還有餘暉
@@ -213,8 +224,10 @@ namespace DUST.World
             if (_clockStyle == null)
                 _clockStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleRight };
             int h = Mathf.FloorToInt(Hour), m = Mathf.FloorToInt((Hour - h) * 60f);
-            string text = $"{(IsNight ? "夜" : "日")}  {h:00}:{m:00}";
-            var r = new Rect(Screen.width - 212, 10, 200, 32);
+            // 第幾天：發條沙漠的事件（刻文的線索）都用天數講
+            int dayNo = (int)System.Math.Floor(TotalHours / 24.0) + 1;
+            string text = $"第 {dayNo} 天  {(IsNight ? "夜" : "日")}  {h:00}:{m:00}";
+            var r = new Rect(Screen.width - 312, 10, 300, 32);
             var c = _clockStyle.normal.textColor;
             _clockStyle.normal.textColor = new Color(0f, 0f, 0f, 0.7f);
             GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), text, _clockStyle);

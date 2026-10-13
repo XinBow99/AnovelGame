@@ -50,6 +50,7 @@ MonoBehaviour:
   wallHalf:
   - {fileID: 919132149155446097, guid: caa5731bbd7d5c2479794d835dfc1b29, type: 3}
   - {fileID: 919132149155446097, guid: ccfd1f683f5be6945bcf8bddaf6383c2, type: 3}
+  inscription: {fileID: 2100000, guid: 0af69ac85858caf408eb37a942a6a9b0, type: 2}
   road: {fileID: 2100000, guid: 6dcc5eb808f61e4408a72290ba1133a0, type: 2}
   water: {fileID: 2100000, guid: 7697deffa080e124aace839d7306ade1, type: 2}
   roofCap: {fileID: 919132149155446097, guid: 181ce2e1b9f19684eab129860f70fbd2, type: 3}

@@ -281,6 +281,22 @@ namespace DUST.Player
             NoticeRpc($"{NameOf(sender)} 把時間調到 {Mathf.FloorToInt(hour):00}:{Mathf.FloorToInt((hour % 1f) * 60f):00}");
         }
 
+        /// <summary>/wait：時間往前跳（發條沙漠：等到某一天、某個時刻）</summary>
+        public void RequestAdvance(float hours)
+        {
+            if (IsOwner) AdvanceRpc(hours);
+        }
+
+        [Rpc(SendTo.Server)]
+        void AdvanceRpc(float hours, RpcParams rpc = default)
+        {
+            ulong sender = rpc.Receive.SenderClientId;
+            if (sender != NetworkManager.ServerClientId && !HostAllowsCheats()) return;
+            hours = Mathf.Clamp(hours, 0f, 24f * 30f);
+            if (DSTTimeOfDay.Instance) DSTTimeOfDay.Instance.Advance(hours);
+            NoticeRpc($"{NameOf(sender)} 讓時間往前走了 {hours:0.#} 小時");
+        }
+
         bool HostAllowsCheats() => Local != null && Local._cheatsForAll.Value;
 
         /// <summary>/summon：在自己前面生出這個地區名冊裡的第 slot 種（生成在主機上做）</summary>

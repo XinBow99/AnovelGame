@@ -169,6 +169,9 @@ namespace DUST.World
                 t.position = wp;
             }
 
+            // 發條沙漠：遺跡外的石碑，只在每天固定時刻的斜光下看得到刻文
+            DSTInscription.Build(gen, pal, s, site);
+
             void Spawn(GameObject prefab, Transform under, Vector3 local, Quaternion rot, float scale = 1f)
             {
                 if (!prefab) return;

@@ -7,6 +7,7 @@ namespace DUST.Animals
     // 發條遷徙：每一群動物有固定的窩和一條環狀路線。牠們在活動時段從窩出發、沿路線繞一圈、時段結束前回到窩。
     // 群在哪裡完全由（世界種子, 地區格, 第幾群, 累加時數）算出來：不用存、不用同步，每台電腦算的都一樣，
     // 每天同一個時間牠們也一定走到同一個地方（玩家記住了就找得到）。足跡（DSTTracks）也是用同一條路線往回推算的。
+    // 發條沙漠（DSTClockwork）：集體遷徙那天改走「窩 → 聚集點 → 窩」；沙暴時躲在窩裡。
     public sealed class DSTBand
     {
         public long id;
@@ -14,119 +15,207 @@ namespace DUST.Animals
         public DSTGenome genome;
         public Vector3 den;
         public int count;                 // 這群幾隻
-        public float radius;              // 路線大概的半徑（找附近的群用）
+        public float radius;              // 路線（含集體遷徙走得到的範圍）大概的半徑（找附近的群用）
         public Vector3 center;            // 路線中心
+        internal int cellX, cellZ;
+        internal Vector2 gatherNear;      // 這個物種在這格的窩的中心（集體遷徙的聚集點在附近）
+        internal int gatherCount;         // 這格有幾群同物種（只有自己一群就不算「集體」）
 
-        // 路線折線（首尾相接）：第一次用到才算（要取樣地形高度，整格 60 群一次算完會卡一下）
-        readonly Vector2[] _ctrl;
-        Vector3[] _pts;
-        float[] _cum;
-        float _length;
-        public float length { get { Build(); return _length; } }
+        /// <summary>一條路線（折線、首尾相接）：第一次用到才取樣地形高度</summary>
+        public sealed class Path
+        {
+            readonly Vector2[] _ctrl;
+            readonly float _y;
+            Vector3[] _pts;
+            float[] _cum;
+            float _length, _turn;
+            readonly int _turnIndex;
+            const int Sub = 10;
+
+            internal Path(Vector2[] ctrl, float y, int turnIndex = -1) { _ctrl = ctrl; _y = y; _turnIndex = turnIndex; }
+
+            public float Length { get { Build(); return _length; } }
+            /// <summary>集體遷徙的路線：走到聚集點時的 s</summary>
+            public float Turn { get { Build(); return _turn; } }
+
+            void Build()
+            {
+                if (_pts != null) return;
+                var gen = DSTWorld.Instance ? DSTWorld.Instance.Gen : null;
+                int k = _ctrl.Length;
+                _pts = new Vector3[k * Sub];
+                for (int j = 0; j < k; j++)
+                {
+                    Vector2 p0 = _ctrl[(j - 1 + k) % k], p1 = _ctrl[j], p2 = _ctrl[(j + 1) % k], p3 = _ctrl[(j + 2) % k];
+                    for (int q = 0; q < Sub; q++)
+                    {
+                        float t = q / (float)Sub, t2 = t * t, t3 = t2 * t;
+                        var v = 0.5f * (2f * p1 + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+                        _pts[j * Sub + q] = new Vector3(v.x, gen != null ? gen.Height(v.x, v.y) : _y, v.y);
+                    }
+                }
+                _cum = new float[_pts.Length + 1];
+                for (int i = 0; i < _pts.Length; i++)
+                    _cum[i + 1] = _cum[i] + Flat(_pts[(i + 1) % _pts.Length] - _pts[i]).magnitude;
+                _length = _cum[_pts.Length];
+                _turn = _turnIndex >= 0 ? _cum[_turnIndex * Sub] : _length;
+            }
+
+            /// <summary>沿路線第 s 公尺的位置與前進方向</summary>
+            public Vector3 PointAt(float s, out Vector3 dir)
+            {
+                Build();
+                s = Mathf.Repeat(s, _length);
+                int lo = 0, hi = _pts.Length - 1;
+                while (lo < hi) { int mid = (lo + hi + 1) >> 1; if (_cum[mid] <= s) lo = mid; else hi = mid - 1; }
+                var a = _pts[lo]; var b = _pts[(lo + 1) % _pts.Length];
+                float seg = _cum[lo + 1] - _cum[lo];
+                float t = seg > 1e-4f ? (s - _cum[lo]) / seg : 0f;
+                dir = Flat(b - a).normalized;
+                return Vector3.Lerp(a, b, t);
+            }
+        }
+
+        readonly Path _loop;
+        readonly Dictionary<int, Path> _mass = new Dictionary<int, Path>();
+        readonly float _loopGuess;        // 還沒取樣地形前估的路線長度
+        public float length => _loop.Length;
+        public Path Loop => _loop;
         readonly (float start, float dur)[] _trips;   // 每天的出門時段（小時，可能超過 24）
         readonly float[] _lateral;        // 每隻的左右位置（m）
         const float Lag = 0.9f;           // 一隻跟著一隻的前後距離（m）
-        const int Sub = 10;
+        const float OutFrac = 0.4f, StayFrac = 0.2f;  // 集體遷徙：去程 40%、在聚集點待 20%、回程 40%
 
         internal DSTBand(long id, int key, Vector3 den, Vector2[] ctrl, (float, float)[] trips, int count, float spread, int salt)
         {
             this.id = id; this.key = key; this.den = den; _trips = trips; this.count = count;
             genome = DSTGenome.Get(key);
-            _ctrl = ctrl;
+            _loop = new Path(ctrl, den.y);
             var c = Vector2.zero;
             foreach (var p in ctrl) c += p;
             c /= ctrl.Length;
             center = new Vector3(c.x, den.y, c.y);
-            foreach (var p in ctrl) radius = Mathf.Max(radius, (p - c).magnitude * 1.1f);   // 曲線會稍微鼓出去
+            for (int i = 0; i < ctrl.Length; i++)
+            {
+                radius = Mathf.Max(radius, (ctrl[i] - c).magnitude * 1.1f);   // 曲線會稍微鼓出去
+                _loopGuess += (ctrl[(i + 1) % ctrl.Length] - ctrl[i]).magnitude * 1.05f;
+            }
+            // 集體遷徙最遠走到離窩「半條路線」的地方
+            radius = Mathf.Max(radius, (new Vector2(den.x, den.z) - c).magnitude + MaxOut);
             _lateral = new float[count];
             for (int m = 0; m < count; m++)
                 _lateral[m] = m == 0 ? 0f : (DSTNoise.Hash01(salt, m, 0, 77) - 0.5f) * spread;
         }
 
-        // Catmull-Rom 平滑成折線，貼地形
-        void Build()
-        {
-            if (_pts != null) return;
-            var gen = DSTWorld.Instance ? DSTWorld.Instance.Gen : null;
-            int k = _ctrl.Length;
-            _pts = new Vector3[k * Sub];
-            for (int j = 0; j < k; j++)
-            {
-                Vector2 p0 = _ctrl[(j - 1 + k) % k], p1 = _ctrl[j], p2 = _ctrl[(j + 1) % k], p3 = _ctrl[(j + 2) % k];
-                for (int q = 0; q < Sub; q++)
-                {
-                    float t = q / (float)Sub, t2 = t * t, t3 = t2 * t;
-                    var v = 0.5f * (2f * p1 + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
-                    _pts[j * Sub + q] = new Vector3(v.x, gen != null ? gen.Height(v.x, v.y) : den.y, v.y);
-                }
-            }
-            _cum = new float[_pts.Length + 1];
-            for (int i = 0; i < _pts.Length; i++)
-                _cum[i + 1] = _cum[i] + Flat(_pts[(i + 1) % _pts.Length] - _pts[i]).magnitude;
-            _length = _cum[_pts.Length];
-        }
+        float MaxOut => _loopGuess * 0.7f;    // 集體遷徙那天走得比較趕：來回最多是平常路線的 1.4 倍
 
         static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
 
-        /// <summary>沿路線第 s 公尺的位置與前進方向</summary>
-        public Vector3 PointAt(float s, out Vector3 dir)
+        /// <summary>這天要不要集體遷徙（聚集點太遠就照常繞圈）：要的話回傳那天的路線</summary>
+        public Path MassPath(int day)
         {
-            Build();
-            s = Mathf.Repeat(s, _length);
-            int lo = 0, hi = _pts.Length - 1;
-            while (lo < hi) { int mid = (lo + hi + 1) >> 1; if (_cum[mid] <= s) lo = mid; else hi = mid - 1; }
-            var a = _pts[lo]; var b = _pts[(lo + 1) % _pts.Length];
-            float seg = _cum[lo + 1] - _cum[lo];
-            float t = seg > 1e-4f ? (s - _cum[lo]) / seg : 0f;
-            dir = Flat(b - a).normalized;
-            return Vector3.Lerp(a, b, t);
+            if (_mass.TryGetValue(day, out var path)) return path;
+            path = null;
+            if (gatherCount >= 2 && DSTClockwork.MassDay(key, day))
+            {
+                var g = DSTClockwork.Gathering(key, day, cellX, cellZ, gatherNear, 40f);
+                var d = new Vector2(den.x, den.z);
+                var to = g - d;
+                float dist = to.magnitude;
+                if (dist > 6f && dist < MaxOut)
+                {
+                    // 去程、回程稍微錯開（腳印才不會疊在一起），在聚集點繞一小圈
+                    var side = new Vector2(-to.y, to.x) / dist;
+                    float w = Mathf.Min(8f, dist * 0.15f);
+                    var ctrl = new[] { d, d + to * 0.5f + side * w, g, d + to * 0.5f - side * w };
+                    path = new Path(ctrl, den.y, 2);
+                }
+            }
+            _mass[day] = path;
+            if (_mass.Count > 8) _mass.Clear();
+            return path;
         }
 
-        /// <summary>某個時間點：在路線上的哪裡（s），沒出門就回傳 false（在窩裡）</summary>
-        public bool RouteAt(double totalHours, out float s)
+        public bool IsMassDay(int day) => MassPath(day) != null;
+
+        /// <summary>某個時間點在哪條路線的哪裡（s）；沒出門（或躲沙暴）就回傳 false（在窩裡）</summary>
+        public bool RouteAt(double totalHours, out Path path, out float s)
         {
+            path = _loop; s = 0f;
+            if (DSTClockwork.Storm(totalHours) > 0.5f) return false;
             double day = System.Math.Floor(totalHours / 24.0);
             for (int d = -1; d <= 0; d++)
                 foreach (var (start, dur) in _trips)
                 {
                     double t0 = (day + d) * 24.0 + start;
                     double rel = totalHours - t0;
-                    if (rel >= 0.0 && rel < dur) { s = (float)(rel / dur) * length; return true; }
+                    if (rel < 0.0 || rel >= dur) continue;
+                    float f = (float)(rel / dur);
+                    var mass = MassPath((int)(day + d));
+                    if (mass == null) { s = f * _loop.Length; return true; }
+                    path = mass;
+                    s = f < OutFrac ? f / OutFrac * mass.Turn
+                      : f < OutFrac + StayFrac ? mass.Turn
+                      : mass.Turn + (f - OutFrac - StayFrac) / (1f - OutFrac - StayFrac) * (mass.Length - mass.Turn);
+                    return true;
                 }
-            s = 0f;
             return false;
         }
+
+        public bool RouteAt(double totalHours, out float s) => RouteAt(totalHours, out _, out s);
 
         /// <summary>第 m 隻現在該在的位置（窩裡就散在窩旁）</summary>
         public Vector3 MemberAt(double totalHours, int m, out bool moving)
         {
-            moving = RouteAt(totalHours, out float s);
+            moving = RouteAt(totalHours, out var path, out float s);
             m = Mathf.Clamp(m, 0, count - 1);
             if (!moving)
             {
                 float a = m * 2.4f;
                 return den + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (m == 0 ? 0f : 0.6f + 0.25f * m);
             }
-            var p = PointAt(s - m * Lag, out var dir);
+            if (path != _loop && s == path.Turn)
+            {
+                // 在聚集點：各群在周圍佔一個方位，散開一點（不然幾群全擠在同一個點上）
+                var g = path.PointAt(s, out _);
+                float ang = DSTNoise.Hash01((int)id, 0, 0, 7403) * Mathf.PI * 2f + m * 0.7f;
+                float rad = 4f + DSTNoise.Hash01((int)id, m, 0, 7404) * 5f;
+                return g + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * rad;
+            }
+            var p = path.PointAt(s - m * Lag, out var dir);
             return p + new Vector3(dir.z, 0f, -dir.x) * _lateral[m];
         }
 
+        public Vector3 PointAt(float s, out Vector3 dir) => _loop.PointAt(s, out dir);
         public float Lateral(int m) => _lateral[Mathf.Clamp(m, 0, count - 1)];
         public float LagOf(int m) => m * Lag;
 
-        /// <summary>[from, to] 之間出門走過的路段（給足跡用）：回呼 (起點 s, 終點 s, 出發的時間, 每公尺幾小時)</summary>
-        public void Walked(double from, double to, System.Action<float, float, double, double> each)
+        /// <summary>[from, to] 之間走過的路段（給足跡用）：回呼 (路線, 起點 s, 終點 s, 時間基準, 每公尺幾小時)；走到 s 的時間 = 時間基準 + s × 每公尺幾小時</summary>
+        public void Walked(double from, double to, System.Action<Path, float, float, double, double> each)
         {
             double day = System.Math.Floor(to / 24.0);
             for (int d = -1; d <= 0; d++)
                 foreach (var (start, dur) in _trips)
                 {
-                    double t0 = (day + d) * 24.0 + start, t1 = t0 + dur;
-                    double a = System.Math.Max(t0, from), b = System.Math.Min(t1, to);
-                    if (b <= a) continue;
-                    double hPerM = dur / length;
-                    each((float)((a - t0) / hPerM), (float)((b - t0) / hPerM), t0, hPerM);
+                    double t0 = (day + d) * 24.0 + start;
+                    var mass = MassPath((int)(day + d));
+                    if (mass == null) Segment(_loop, 0f, _loop.Length, t0, dur);
+                    else
+                    {
+                        Segment(mass, 0f, mass.Turn, t0, dur * OutFrac);
+                        Segment(mass, mass.Turn, mass.Length, t0 + dur * (OutFrac + StayFrac), dur * (1f - OutFrac - StayFrac));
+                    }
                 }
+
+            void Segment(Path path, float sa, float sb, double tStart, double dur)
+            {
+                if (sb - sa < 0.01f) return;
+                double a = System.Math.Max(tStart, from), b = System.Math.Min(tStart + dur, to);
+                if (b <= a) return;
+                double hPerM = dur / (sb - sa);
+                double tBase = tStart - sa * hPerM;
+                each(path, (float)((a - tBase) / hPerM), (float)((b - tBase) / hPerM), tBase, hPerM);
+            }
         }
 
         /// <summary>下一次出門的鐘點（給 /herds 指令看）</summary>
@@ -186,6 +275,7 @@ namespace DUST.Animals
         }
 
         const float MaxRadius = 240f;
+        const float GatherCell = 600f;
 
         static List<DSTBand> Cell(int cx, int cz)
         {
@@ -197,8 +287,21 @@ namespace DUST.Animals
             for (int i = 0; i < DensPerCell; i++)
             {
                 var b = Make(gen, cx, cz, i);
-                if (b != null) list.Add(b);
+                if (b != null)
+                {
+                    b.cellX = Mathf.FloorToInt(b.den.x / GatherCell); b.cellZ = Mathf.FloorToInt(b.den.z / GatherCell);
+                    list.Add(b);
+                }
             }
+            // 集體遷徙的聚集點：同一個物種、附近（600 m 一小格）各窩的中心（各群才走得到）
+            var sums = new Dictionary<(int, int, int), (Vector2 sum, int n)>();
+            foreach (var b in list)
+            {
+                var k = (b.key, b.cellX, b.cellZ);
+                sums.TryGetValue(k, out var s);
+                sums[k] = (s.sum + new Vector2(b.den.x, b.den.z), s.n + 1);
+            }
+            foreach (var b in list) { var s = sums[(b.key, b.cellX, b.cellZ)]; b.gatherNear = s.sum / s.n; b.gatherCount = s.n; }
             _cells[id] = list;
             return list;
         }
