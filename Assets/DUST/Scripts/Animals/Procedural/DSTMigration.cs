@@ -142,7 +142,7 @@ namespace DUST.Animals
         public bool RouteAt(double totalHours, out Path path, out float s)
         {
             path = _loop; s = 0f;
-            if (DSTClockwork.Storm(totalHours) > 0.5f) return false;
+            if (DSTClockwork.Storm(totalHours) > 0.5f || DSTAnomaly.Shelter(totalHours)) return false;
             double day = System.Math.Floor(totalHours / 24.0);
             for (int d = -1; d <= 0; d++)
                 foreach (var (start, dur) in _trips)

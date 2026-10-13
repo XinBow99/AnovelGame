@@ -15029,6 +15029,7 @@ GameObject:
   - component: {fileID: 246263795}
   - component: {fileID: 246263794}
   - component: {fileID: 246263793}
+  - component: {fileID: 246263796}
   m_Layer: 0
   m_Name: Clockwork
   m_TagString: Untagged
@@ -15068,6 +15069,7 @@ MonoBehaviour:
   dustMaterial: {fileID: 2100000, guid: 77457d745441f624188c5b051f503c37, type: 2}
   stormFogDistance: 14
   stormFogColor: {r: 0.86, g: 0.62, b: 0.38, a: 1}
+  stormTint: {r: 1.6, g: 0.95, b: 0.5, a: 1}
   stormSunDim: 0.15
   windSpeed: 14
 --- !u!4 &246263795
@@ -15085,6 +15087,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &246263796
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 246263792}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f68e13a97b55e741a166c06908c167d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTAnomalies
+  glowMaterial: {fileID: 2100000, guid: c4dc22c737ab7a444861736be0cce7b4, type: 2}
+  dustMaterial: {fileID: 2100000, guid: 77457d745441f624188c5b051f503c37, type: 2}
+  skyDistance: 900
 --- !u!1001 &246493290
 PrefabInstance:
   m_ObjectHideFlags: 0

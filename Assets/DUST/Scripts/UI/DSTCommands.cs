@@ -136,6 +136,8 @@ namespace DUST.UI
                     {
                         var parts = new System.Collections.Generic.List<string>();
                         if (DSTClockwork.StormOn(d, out float st, out float du)) parts.Add($"沙暴 {Clock(d * 24.0 + st)}~{Clock(d * 24.0 + st + du)}");
+                        if (DSTAnomaly.On(d, out var an))
+                            parts.Add($"異象{an.FullName} {Clock(an.StartAt)}~{Clock(an.EndAt)}");
                         if (DSTClockwork.Meteorite(d, out double land, out var where))
                             parts.Add($"流星雨 21:00~03:00，隕石 {Clock(land)} 落在 ({where.x:0}, {where.y:0})");
                         if (DUST.Animals.DSTMigration.Available)

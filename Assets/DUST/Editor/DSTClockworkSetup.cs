@@ -19,6 +19,7 @@ namespace DUST.EditorTools
 
             var dust = Unlit("M_DST_StormDust", Save("T_DST_Dust", 64, 64, Dot, false), new Color(0.82f, 0.62f, 0.42f, 0.32f), additive: false, fog: true);
             var meteor = Unlit("M_DST_Meteor", Save("T_DST_Streak", 128, 32, Streak, false), Color.white, additive: true, fog: false);
+            var glow = Unlit("M_DST_Glow", Save("T_DST_Glow", 8, 32, (u, v) => new Color(1f, 1f, 1f, Mathf.Exp(-Mathf.Pow((v - 0.5f) * 5f, 2f))), false), Color.white, additive: true, fog: false);
             var rock = MeteoriteMaterial();
             var scorch = Decal("M_DST_Scorch", Save("T_DST_Scorch", 256, 256, Scorch, false), null);
             var runes = Runes(out var runesN);
@@ -42,6 +43,11 @@ namespace DUST.EditorTools
             sky.streakMaterial = meteor;
             sky.meteoriteMaterial = rock;
             sky.scorchMaterial = scorch;
+            var anomalies = go.GetComponent<DSTAnomalies>();
+            if (!anomalies) anomalies = go.AddComponent<DSTAnomalies>();
+            anomalies.glowMaterial = glow;
+            anomalies.dustMaterial = dust;
+            EditorUtility.SetDirty(anomalies);
             EditorUtility.SetDirty(weather);
             EditorUtility.SetDirty(sky);
             EditorSceneManager.MarkSceneDirty(go.scene);

@@ -142,10 +142,10 @@ namespace DUST.World
         {
             double now = DSTClockwork.Now;
             int today = DSTClockwork.DayOf(now);
-            int pick = (int)(DSTNoise.Hash(salt, today, 0, 8102) % 3u);
-            for (int tries = 0; tries < 3; tries++, pick = (pick + 1) % 3)
+            int pick = (int)(DSTNoise.Hash(salt, today, 0, 8102) % 4u);
+            for (int tries = 0; tries < 4; tries++, pick = (pick + 1) % 4)
             {
-                string s = pick switch { 0 => MeteorClue(today), 1 => StormClue(now, today), _ => GatherClue(now, today) };
+                string s = pick switch { 0 => MeteorClue(today), 1 => StormClue(now, today), 2 => AnomalyClue(now, today), _ => GatherClue(now, today) };
                 if (s != null) return s;
             }
             return "沙與星，都照著同一座鐘走。";
@@ -168,6 +168,16 @@ namespace DUST.World
             {
                 if (!DSTClockwork.StormOn(d, out float start, out float dur) || d * 24.0 + start < now) continue;
                 return $"第 {d + 1} 天 {Hm(d * 24.0 + start)}，風沙吞沒天空，萬獸歸巢。";
+            }
+            return null;
+        }
+
+        string AnomalyClue(double now, int today)
+        {
+            for (int d = today; d < today + 8; d++)
+            {
+                if (!DSTAnomaly.On(d, out var e) || e.StartAt < now) continue;
+                return $"第 {d + 1} 天 {Hm(e.StartAt)}，{e.FullName}將至。";
             }
             return null;
         }

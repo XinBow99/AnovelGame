@@ -15,6 +15,7 @@ namespace DUST.World
         public float windSpeed = 14f;
 
         public static float Intensity { get; private set; }
+        public static float Flash;                 // 閃電（DSTAnomalies 設定，每幀衰減）
 
         Fog _fog;
         float _baseMfp, _baseHeight, _baseMaxHeight;
@@ -54,8 +55,10 @@ namespace DUST.World
         void LateUpdate()
         {
             var tod = DSTTimeOfDay.Instance;
-            if (Intensity > 0f && tod && tod.sun && tod.sun.enabled)
-                tod.sun.intensity *= Mathf.Lerp(1f, stormSunDim, Intensity);
+            if (!tod || !tod.sun || !tod.sun.enabled) return;
+            if (Intensity > 0f) tod.sun.intensity *= Mathf.Lerp(1f, stormSunDim, Intensity);
+            float ak = DSTAnomaly.Current(DSTClockwork.Now, out var an);
+            if (ak > 0f) tod.sun.intensity *= Mathf.Lerp(1f, an.sun, ak);
         }
 
         void ApplyFog(float k)
@@ -65,7 +68,10 @@ namespace DUST.World
                 var w = DSTWorld.Instance;
                 if (!w || !w.fogVolume || !w.fogVolume.profile.TryGet(out _fog)) return;
             }
-            if (k <= 0f)
+            // 異象的顏色霧（DSTAnomaly）疊在沙暴之上
+            float ak = DSTAnomaly.Current(DSTClockwork.Now, out var an);
+            float haze = ak * an.hazeAmount;
+            if (k <= 0f && haze <= 0f && Flash <= 0f)
             {
                 if (_touched)
                 {
@@ -93,12 +99,22 @@ namespace DUST.World
             _fog.baseHeight.overrideState = true;
             _fog.maximumHeight.overrideState = true;
             // 指數內插：遠景先被吞掉，最後連眼前都看不清
-            _fog.meanFreePath.value = Mathf.Exp(Mathf.Lerp(Mathf.Log(_baseMfp), Mathf.Log(stormFogDistance), Mathf.Pow(k, 0.8f)));
-            _fog.albedo.value = Color.Lerp(_baseAlbedo, stormFogColor, k);
+            float logMfp = Mathf.Lerp(Mathf.Log(_baseMfp), Mathf.Log(stormFogDistance), Mathf.Pow(k, 0.8f));
+            if (haze > 0f) logMfp = Mathf.Lerp(logMfp, Mathf.Min(logMfp, Mathf.Log(an.hazeDistance)), Mathf.Clamp01(haze * 1.5f));
+            _fog.meanFreePath.value = Mathf.Exp(logMfp);
+            var albedo = Color.Lerp(_baseAlbedo, stormFogColor, k);
             // 霧的顏色取自天空（藍色），用 tint 染成沙色；霧層拉高，天空也被沙蓋住
-            _fog.tint.value = Color.Lerp(_baseTint, stormTint, k);
-            _fog.baseHeight.value = Mathf.Lerp(_baseHeight, _baseHeight + 80f, k);
-            _fog.maximumHeight.value = Mathf.Lerp(_baseMaxHeight, _baseMaxHeight + 400f, k);
+            var tint = Color.Lerp(_baseTint, stormTint, k);
+            if (haze > 0f)
+            {
+                albedo = Color.Lerp(albedo, an.haze, haze);
+                tint = Color.Lerp(tint, new Color(an.haze.r * 1.9f, an.haze.g * 1.5f, an.haze.b * 1.3f), haze);   // 抵掉天空的藍
+            }
+            _fog.albedo.value = albedo;
+            _fog.tint.value = tint * (1f + Flash * 5f);         // 閃電：整片霧亮一下
+            float up = Mathf.Max(k, haze);
+            _fog.baseHeight.value = Mathf.Lerp(_baseHeight, _baseHeight + 80f, up);
+            _fog.maximumHeight.value = Mathf.Lerp(_baseMaxHeight, _baseMaxHeight + 400f, up);
         }
 
         // ------------------------------------------------------------------ 飛沙：跟著鏡頭的一團粒子，順著風吹
@@ -143,7 +159,7 @@ namespace DUST.World
             var cam = Camera.main;
             if (cam) _dust.transform.position = cam.transform.position - _windDir * 8f;
             var em = _dust.emission;
-            em.rateOverTime = k * 2200f;
+            em.rateOverTime = k * 900f;
             var vel = _dust.velocityOverLifetime;
             var v = _windDir * windSpeed * (0.6f + 0.4f * k);
             vel.x = new ParticleSystem.MinMaxCurve(v.x * 0.8f, v.x * 1.2f);

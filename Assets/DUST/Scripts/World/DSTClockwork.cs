@@ -8,6 +8,7 @@ namespace DUST.World
     //   流星雨：某些夜晚，每一顆流星的時間、方向都固定；當晚有一顆會落地，隕石發光到隔天中午
     //   集體遷徙：某些天某個物種的各群一起走到同一個聚集點（DSTMigration）
     //   遺跡刻文：每處遺跡的石碑只在固定時刻、陽光斜掃碑面時看得到（DSTInscription）
+    //   異象：雜湊拼出來、有專名的怪天氣（DSTAnomaly）
     public static class DSTClockwork
     {
         const int Dr2Seed = 0x5EED;
@@ -30,7 +31,7 @@ namespace DUST.World
         {
             start = 9f + H(day, 7101) * 8f;
             duration = 1.2f + H(day, 7102) * 1.8f;
-            if (day <= 0) return false;                     // 開局那天不吹，讓人先看看沙漠
+            if (day <= 0 || day == DSTAnomaly.ForcedDay) return false;   // 開局那天不吹，讓人先看看沙漠；那天留給異象
             return day == 1 + (Seed & 1) || H(day, 7100) < 0.28f;   // 第 2 或第 3 天一定有一場，之後隨機
         }
 
