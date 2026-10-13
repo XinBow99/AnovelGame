@@ -29,6 +29,8 @@ namespace DUST.Vehicles
         float _yaw;
         float _defaultDistance = -1f, _defaultHeight;
         float _freeYaw, _freePitch, _lastLook = -99f;
+        float _focusY, _camDist;
+        bool _snapFocus = true;
 
         // 每台載具可以有自己的追車距離；0 = 用預設
         public void SetFraming(float dist, float h)
@@ -42,6 +44,7 @@ namespace DUST.Vehicles
         void OnEnable()
         {
             _freeYaw = 0f; _freePitch = 0f; _lastLook = -99f;
+            _snapFocus = true; _camDist = 0f;
             if (!target) return;
             var t = target.transform;
             _yaw = t.eulerAngles.y;
@@ -75,18 +78,22 @@ namespace DUST.Vehicles
             var rot = Quaternion.Euler(0f, _yaw + _freeYaw, 0f);
             // 上下：繞著看的點轉（正 = 鏡頭抬高往下看）
             var offset = rot * (Quaternion.Euler(_freePitch, 0f, 0f) * new Vector3(0f, height - lookHeight, -distance));
-            var from = t.position + Vector3.up * lookHeight;
-            var want = from + offset;
+            // 鏡頭和車子保持固定距離（不再用位置追趕：車越快落後越多，加速時像拉遠鏡頭，會暈）。
+            // 只有高度稍微平滑，壓過顛簸時不會跟著抖
+            var tp = t.position;
+            _focusY = _snapFocus ? tp.y : Mathf.Lerp(_focusY, tp.y, 1f - Mathf.Exp(-positionDamping * 1.5f * Time.deltaTime));
+            _snapFocus = false;
+            var from = new Vector3(tp.x, _focusY + lookHeight, tp.z);
 
-            // 不要穿牆：從車往鏡頭打射線（有剛體的東西不擋，例如站上其他腳踏車）
-            var dir = want - from;
-            if (Physics.SphereCast(from, 0.25f, dir.normalized, out var hit, dir.magnitude, ~0, QueryTriggerInteraction.Ignore)
+            // 不要穿牆：從車往鏡頭打射線（有剛體的東西不擋，例如站上其他腳踏車）；被擋住時馬上拉近，離開後慢慢退回去
+            var dir = offset.normalized;
+            float want = offset.magnitude;
+            if (Physics.SphereCast(from, 0.25f, dir, out var hit, want, ~0, QueryTriggerInteraction.Ignore)
                 && !hit.transform.IsChildOf(t) && !hit.collider.attachedRigidbody)
-                want = from + dir.normalized * Mathf.Max(1.0f, hit.distance - 0.2f);
+                want = Mathf.Max(1.0f, hit.distance - 0.2f);
+            _camDist = want < _camDist || _camDist <= 0f ? want : Mathf.Lerp(_camDist, want, 1f - Mathf.Exp(-2f * Time.deltaTime));
 
-            // 滑鼠正在轉的時候跟手一點，不然會覺得鏡頭黏黏的
-            float damp = Time.time - _lastLook < 0.3f ? positionDamping * 3f : positionDamping;
-            transform.position = Vector3.Lerp(transform.position, want, 1f - Mathf.Exp(-damp * Time.deltaTime));
+            transform.position = from + dir * _camDist;
             transform.rotation = Quaternion.LookRotation(from - transform.position);
         }
 
