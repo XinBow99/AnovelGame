@@ -21,8 +21,10 @@ namespace DUST.Vehicles
 
         [Header("Free look")]
         public float mouseSensitivity = 0.1f;   // 度 / 像素（跟走路一樣）
-        public float recenterDelay = 1.5f;      // 滑鼠停多久開始轉回去
-        public float recenterSpeed = 2.5f;
+        public float recenterDelay = 2.5f;      // 滑鼠停多久開始轉回去
+        public float recenterTime = 1.2f;       // 轉回去大約花多久（緩起緩停）
+        public float recenterMaxSpeed = 90f;    // 度 / 秒；太快會暈
+        public float recenterMinSpeed = 2f;     // 車子比這慢（停著）就不轉回去，讓人慢慢看
 
         float _yaw;
         float _defaultDistance = -1f, _defaultHeight;
@@ -97,12 +99,22 @@ namespace DUST.Vehicles
                 _freePitch = Mathf.Clamp(_freePitch - look.y, cockpit ? -60f : -25f, 60f);
                 _lastLook = Time.time;
             }
-            else if (Time.time - _lastLook > recenterDelay)
+            else if (Time.time - _lastLook > recenterDelay && Moving())
             {
-                float k = 1f - Mathf.Exp(-recenterSpeed * Time.deltaTime);
-                _freeYaw = Mathf.LerpAngle(_freeYaw, 0f, k);
-                _freePitch = Mathf.Lerp(_freePitch, 0f, k);
+                // SmoothDamp + 速度上限：慢慢加速、慢慢停，不會一下子甩回車後
+                _freeYaw = Mathf.SmoothDampAngle(_freeYaw, 0f, ref _yawVel, recenterTime * 0.5f, recenterMaxSpeed);
+                _freePitch = Mathf.SmoothDamp(_freePitch, 0f, ref _pitchVel, recenterTime * 0.5f, recenterMaxSpeed);
+                return;
             }
+            _yawVel = _pitchVel = 0f;
+        }
+
+        float _yawVel, _pitchVel;
+
+        bool Moving()
+        {
+            var rb = target ? target.GetComponentInParent<Rigidbody>() : null;
+            return !rb || rb.linearVelocity.sqrMagnitude > recenterMinSpeed * recenterMinSpeed;
         }
     }
 }

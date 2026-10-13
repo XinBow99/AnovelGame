@@ -116,6 +116,7 @@ namespace DUST.EditorTools
             };
             var oldExit = go.transform.Find("Exit_Left");
             if (oldExit) Object.DestroyImmediate(oldExit.gameObject);
+            go.AddComponent<DSTPhysicsClaimer>();     // 撞箱子、撞倒 / 撞碎隨機世界的擺設
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(go, PrefabPath);
             Object.DestroyImmediate(go);

@@ -17,6 +17,19 @@ namespace DUST.World
         float _bornAt;
         Rigidbody[] _bodies;
 
+        /// <summary>原本貼著 / 疊在一起的靜態東西（屋頂、牆腳的飾條、轉角柱）不要撞：不然碎塊一出生就被夾住動不了。地面照撞</summary>
+        public void IgnoreStaticAround(Bounds b)
+        {
+            b.Expand(0.3f);
+            var hits = Physics.OverlapBox(b.center, b.extents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+            var mine = GetComponentsInChildren<Collider>();
+            foreach (var h in hits)
+            {
+                if (h.attachedRigidbody || h.GetComponent<DSTWorldChunk>() || h.transform.IsChildOf(transform)) continue;
+                foreach (var c in mine) Physics.IgnoreCollision(c, h);
+            }
+        }
+
         public void Burst(Vector3 baseVelocity, Vector3 dir, float deltaV, Vector3 point, int seed)
         {
             var rng = new System.Random(seed);
@@ -46,7 +59,9 @@ namespace DUST.World
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
                 rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;   // 薄木板高速飛也不會穿地
 
-                Vector3 p = piece.transform.position;
+                // 碎塊的中心（Blender 切的碎塊原點都在模型原點，不能用 transform.position）
+                var pr = piece.GetComponent<Renderer>();
+                Vector3 p = pr ? pr.bounds.center : piece.transform.position;
                 float near = Mathf.Max(0.25f, 1f - Vector3.Distance(p, point) / (size * 2.2f));
                 Vector3 radial = p - center;
                 radial = radial.sqrMagnitude > 1e-4f ? radial.normalized : Vector3.up;

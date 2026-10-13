@@ -9201,8 +9201,10 @@ MonoBehaviour:
   rotationDamping: 4
   cockpit: 0
   mouseSensitivity: 0.1
-  recenterDelay: 1.5
-  recenterSpeed: 2.5
+  recenterDelay: 2.5
+  recenterTime: 1.2
+  recenterMaxSpeed: 90
+  recenterMinSpeed: 2
 --- !u!114 &136179611
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -50626,6 +50628,7 @@ GameObject:
   - component: {fileID: 801644405}
   - component: {fileID: 801644408}
   - component: {fileID: 801644407}
+  - component: {fileID: 801644409}
   m_Layer: 0
   m_Name: World
   m_TagString: Untagged
@@ -50713,6 +50716,22 @@ MonoBehaviour:
   maxJobs: 4
   appliesPerFrame: 3
   scattersPerFrame: 2
+--- !u!114 &801644409
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 801644404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed50acb2a04d3de4b85c9c4a53938b54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTPropSync
+  ShowTopMostFoldoutHeaderGroup: 1
+  regrowHours: 18
+  resetMovedHours: 72
+  clearRadius: 50
 --- !u!1001 &801665257
 PrefabInstance:
   m_ObjectHideFlags: 0

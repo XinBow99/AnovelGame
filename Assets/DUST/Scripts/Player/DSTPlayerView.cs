@@ -16,7 +16,8 @@ namespace DUST.Player
         public float lookHeight = 0.32f;
         public float actionDistance = 1.7f;     // 上下車時拉遠一點
         public float damping = 10f;
-        public float freeLookReturn = 8f;       // 放開 Alt 後鏡頭轉回來的速度
+        public float freeLookReturnDelay = 0.6f;  // 放開 Alt 後先停一下，再轉回來
+        public float freeLookReturnTime = 0.9f;   // 轉回來大約花多久（緩起緩停，太快會暈）
 
         public bool ThirdPerson { get; private set; }
         public bool Forced => _forceTarget != null;
@@ -30,6 +31,7 @@ namespace DUST.Player
         // 自由視角（Alt）與上下車時滑鼠繞的角度，都是加在原本鏡頭方向上的偏移
         float _freeYaw, _freePitch;
         bool _freeHeld;
+        float _freeReleased, _freeYawVel, _freePitchVel;
         float _forceYaw, _forcePitch;
         readonly RaycastHit[] _hits = new RaycastHit[16];
 
@@ -100,10 +102,15 @@ namespace DUST.Player
             if (!_freeHeld || !_pc || !_pc.enabled)
             {
                 _freeHeld = false;
-                float k = 1f - Mathf.Exp(-freeLookReturn * dt);
-                _freeYaw = Mathf.Lerp(_freeYaw, 0f, k);
-                _freePitch = Mathf.Lerp(_freePitch, 0f, k);
+                _freeReleased += dt;
+                if (_freeReleased > freeLookReturnDelay)
+                {
+                    // SmoothDamp：慢慢加速、接近時慢慢停，不會一放開就甩回去
+                    _freeYaw = Mathf.SmoothDampAngle(_freeYaw, 0f, ref _freeYawVel, freeLookReturnTime * 0.5f);
+                    _freePitch = Mathf.SmoothDampAngle(_freePitch, 0f, ref _freePitchVel, freeLookReturnTime * 0.5f);
+                }
             }
+            else { _freeReleased = 0f; _freeYawVel = _freePitchVel = 0f; }
 
             if (!viewCamera || !viewCamera.enabled) return;
             var cam = viewCamera.transform;

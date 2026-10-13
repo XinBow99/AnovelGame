@@ -126,6 +126,9 @@ MonoBehaviour:
   crouchHeight: 0.4
   eyeBelowTop: 0.110000014
   headForward: 0.22
+  flySpeed: 9
+  flySprintMultiplier: 3
+  bodyMass: 35
 --- !u!114 &7118398814961290701
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -176,6 +179,8 @@ MonoBehaviour:
   lookHeight: 0.32
   actionDistance: 1.7
   damping: 10
+  freeLookReturnDelay: 0.6
+  freeLookReturnTime: 0.9
 --- !u!114 &2660897622994969484
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -188,7 +193,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 0
+  GlobalObjectIdHash: 982901258
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0

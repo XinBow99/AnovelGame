@@ -66,6 +66,7 @@ namespace DUST.World
                 var go = Spawn(prefab, props, new Vector3(f.pos.x, y, f.pos.y), Quaternion.Euler(0f, f.yaw, 0f));
                 if (go) go.transform.localScale *= f.scale;
             }
+            DSTWorldProp.Attach(root.gameObject, gen.Seed, s.cellX, s.cellZ, 2);   // 撞得倒、打得碎
         }
 
         // ------------------------------------------------------------------ 房子

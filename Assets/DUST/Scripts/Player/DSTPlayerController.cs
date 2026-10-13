@@ -226,6 +226,21 @@ namespace DUST.Player
             if ((flags & CollisionFlags.Above) != 0 && _velocity.y > 0f) _velocity.y = 0f;
         }
 
+        // 走路撞到隨機世界的擺設：CharacterController 不會推剛體，自己推（陶罐會倒、跑太快會碎）
+        public float bodyMass = 35f;
+        float _nextBump;
+
+        void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if (Time.time < _nextBump || hit.moveDirection.y < -0.7f) return;      // 踩在上面不算
+            var prop = hit.collider.GetComponentInParent<DUST.World.DSTWorldProp>();
+            if (!prop) return;
+            var v = new Vector3(_velocity.x, 0f, _velocity.z);
+            if (v.sqrMagnitude < 0.25f) return;
+            _nextBump = Time.time + 0.1f;
+            prop.Bump(v, bodyMass, hit.point);
+        }
+
         void UpdateCrouch(bool held, float dt)
         {
             if (held) _crouching = true;

@@ -1,0 +1,365 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7f1b6176e7c122418dfbbc77c7800a2, type: 3}
+  m_Name: DST_PropCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.World.DSTPropCatalog
+  entries:
+  - name: SM_DST_Rock_Boulder_A
+    mode: 1
+    mass: 6110.828
+    refVolume: 5.3137636
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 11
+    minHitterMass: 300
+    debris: {fileID: 7512432939795872664, guid: 882b01ff779c8d241944677ad6457010, type: 3}
+    debrisDensity: 2300
+    capsule: 0
+  - name: SM_DST_Rock_Boulder_B
+    mode: 1
+    mass: 3691.1128
+    refVolume: 3.2096634
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 11
+    minHitterMass: 300
+    debris: {fileID: 3274402699536260089, guid: 3b76eeb74d365144fa719772186d7cf8, type: 3}
+    debrisDensity: 2300
+    capsule: 0
+  - name: SM_DST_Rock_Boulder_C
+    mode: 1
+    mass: 6418.5635
+    refVolume: 5.5813594
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 11
+    minHitterMass: 300
+    debris: {fileID: 3060021988261277891, guid: d16a23d8cdd65a74581930ea14401461, type: 3}
+    debrisDensity: 2300
+    capsule: 0
+  - name: SM_DST_Rock_Slab_A
+    mode: 1
+    mass: 2395.5815
+    refVolume: 2.0831144
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 10
+    minHitterMass: 300
+    debris: {fileID: 7702169778683824448, guid: 8498d2b1e7b9393478ff51071b480da5, type: 3}
+    debrisDensity: 2300
+    capsule: 0
+  - name: SM_DST_Rock_Pillar_A
+    mode: 1
+    mass: 2436.9446
+    refVolume: 2.1190822
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 8
+    minHitterMass: 300
+    debris: {fileID: 4184244427174079469, guid: 356c5b95aa4adfb49a77cfa4c1c7641d, type: 3}
+    debrisDensity: 2300
+    capsule: 0
+  - name: SM_DST_Prop_Rubble_Pile_S
+    mode: 1
+    mass: 584.33215
+    refVolume: 0.64925796
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 15
+    debris: {fileID: 9029603493766997488, guid: 4c0ceb5089afc0f4c89e1d1179ab1380, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Prop_Rubble_Pile_M
+    mode: 1
+    mass: 4076.0269
+    refVolume: 4.5289187
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 200
+    debris: {fileID: 3422306182501174841, guid: 682e64ccb0b2e5d4ba73b1cd41c21f8c, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Prop_Rubble_Pile_L
+    mode: 1
+    mass: 6759.8403
+    refVolume: 7.510934
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 7
+    minHitterMass: 250
+    debris: {fileID: 2590267038628816001, guid: 2bd1ddc277692b2459dafe1c345cd45f, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Straight_400x400_A
+    mode: 1
+    mass: 7200
+    refVolume: 8
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 7
+    minHitterMass: 250
+    debris: {fileID: 4468652510505702130, guid: 6f9a5ac00b94ecb49b48ecdf723ac997, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Straight_400x400_B
+    mode: 1
+    mass: 7200
+    refVolume: 8
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 7
+    minHitterMass: 250
+    debris: {fileID: 8635270448408756549, guid: 3e0049a14efcf334d8606fd0b7ed389f, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Straight_400x400_Damaged
+    mode: 1
+    mass: 7200
+    refVolume: 8
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 3022970483651961704, guid: 42049087611106946b04d1a19c9e2547, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Window_Arch_M_400
+    mode: 1
+    mass: 8640
+    refVolume: 9.6
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 7420349191377440417, guid: de5f193393e135d4680e3729b44018b9, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Gate_DoubleDoor_400
+    mode: 1
+    mass: 6547.2
+    refVolume: 10.912001
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 2225834766188286582, guid: 5b682c97355d9be479e7be057042c820, type: 3}
+    debrisDensity: 1200
+    capsule: 0
+  - name: SM_DST_Wall_Corner_Outer
+    mode: 1
+    mass: 900
+    refVolume: 1
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 3761901947775731738, guid: a3ef503cdf3a71d4e84fbb4c2826e7d4, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Straight_200x400_A
+    mode: 1
+    mass: 3600
+    refVolume: 4
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 4380370218511256910, guid: 3033b0bd6ed89bc4597791e2ebf3bc32, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Wall_Straight_200x400_B
+    mode: 1
+    mass: 3600
+    refVolume: 4
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 8405515876194028644, guid: de2f6fe9f1e7a4a4895ab07661778ee6, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Roof_Cap_400x400
+    mode: 1
+    mass: 3600.0002
+    refVolume: 4.8
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 250
+    debris: {fileID: 4683466600503514694, guid: ff43ce78c12bcca459b0342d802fa871, type: 3}
+    debrisDensity: 1500
+    capsule: 0
+  - name: SM_DST_Trim_Cornice_400
+    mode: 1
+    mass: 892.80005
+    refVolume: 0.99200004
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 15
+    debris: {fileID: 5831275916174387969, guid: b0245e229f068fe43a05a5cb93e53c63, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Trim_Cornice_Corner_Out
+    mode: 1
+    mass: 141.97826
+    refVolume: 0.15775362
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 15
+    debris: {fileID: 5251661617106697538, guid: e3a3522bff7a6dc47baebed232a6504a, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Trim_Plinth_400
+    mode: 1
+    mass: 115.199936
+    refVolume: 0.12799993
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 15
+    debris: {fileID: 3017720321952483170, guid: 4d49921be311faa4a9c77fdbd0546edc, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Trim_Plinth_Corner_Out
+    mode: 1
+    mass: 121.10399
+    refVolume: 0.13455999
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 15
+    debris: {fileID: 2363024515522465277, guid: 4697e1e4deb99bb4eb82b79e2cba0d2c, type: 3}
+    debrisDensity: 1800
+    capsule: 0
+  - name: SM_DST_Settle_Well
+    mode: 1
+    mass: 9984.169
+    refVolume: 9.984169
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 9
+    minHitterMass: 300
+    debris: {fileID: 5876110041727753638, guid: 1649430587fa4b24fabbee66c89dd027, type: 3}
+    debrisDensity: 2000
+    capsule: 0
+  - name: SM_DST_Settle_Stall_A
+    mode: 1
+    mass: 4072.6877
+    refVolume: 16.29075
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 4
+    minHitterMass: 15
+    debris: {fileID: 2349498413706651174, guid: e596e2dce0b4a4741861e3f5e4a17c20, type: 3}
+    debrisDensity: 500
+    capsule: 0
+  - name: SM_DST_Settle_Stall_B
+    mode: 1
+    mass: 4072.6877
+    refVolume: 16.29075
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 4
+    minHitterMass: 15
+    debris: {fileID: 6644649762751358444, guid: 522caef7cf6bbfc41954eb97817618ed, type: 3}
+    debrisDensity: 500
+    capsule: 0
+  - name: SM_DST_Settle_Palm_A
+    mode: 2
+    mass: 350
+    refVolume: 264.35825
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 0
+    minHitterMass: 250
+    debris: {fileID: 0}
+    debrisDensity: 0
+    capsule: 1
+  - name: SM_DST_Settle_Palm_B
+    mode: 2
+    mass: 350
+    refVolume: 204.70705
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 0
+    minHitterMass: 250
+    debris: {fileID: 0}
+    debrisDensity: 0
+    capsule: 1
+  - name: SM_DST_Prop_Pot_Clay_S
+    mode: 0
+    mass: 5
+    refVolume: 0.057137202
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 0
+    debris: {fileID: 3787059396463085602, guid: b803535bca14c5c479f3f659c77d1d8a, type: 3}
+    debrisDensity: 1800
+    capsule: 1
+  - name: SM_DST_Prop_Pot_Clay_L
+    mode: 0
+    mass: 14
+    refVolume: 0.3434242
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 5
+    minHitterMass: 0
+    debris: {fileID: 1007878302182612837, guid: ccac9706db5b1604696faa140cb8d2db, type: 3}
+    debrisDensity: 1800
+    capsule: 1
+  - name: SM_DST_Prop_Crate_L_Broken
+    mode: 0
+    mass: 20
+    refVolume: 2.0971522
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 0
+    debris: {fileID: 6873545021967357895, guid: fa28bcda4b327b54099dd8e30146c282, type: 3}
+    debrisDensity: 550
+    capsule: 0
+  - name: SM_DST_Prop_Crate_S
+    mode: 0
+    mass: 8
+    refVolume: 0.26214403
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 6
+    minHitterMass: 0
+    debris: {fileID: 1266011076610997480, guid: a3760880502f20e4bbbbddd0c104c606, type: 3}
+    debrisDensity: 550
+    capsule: 0
+  - name: SM_DST_Prop_Crate_L
+    mode: 0
+    mass: 25
+    refVolume: 2.0971522
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 7
+    minHitterMass: 0
+    debris: {fileID: 7974150477250539855, guid: 3dfa53ddf9f8c664984a823cebe51be8, type: 3}
+    debrisDensity: 550
+    capsule: 0
+  - name: SM_DST_Prop_Barrel_Wood
+    mode: 0
+    mass: 30
+    refVolume: 0.3549456
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 8
+    minHitterMass: 0
+    debris: {fileID: 2777903252175331350, guid: 48dff064c10c0a5438c1f6247846b71e, type: 3}
+    debrisDensity: 600
+    capsule: 1
+  - name: SM_DST_Prop_Barrel_Metal_Closed
+    mode: 0
+    mass: 40
+    refVolume: 0.30632803
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 0
+    minHitterMass: 0
+    debris: {fileID: 0}
+    debrisDensity: 0
+    capsule: 1
+  - name: SM_DST_Prop_Barrel_Metal_Dented
+    mode: 0
+    mass: 40
+    refVolume: 0.34020624
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 0
+    minHitterMass: 0
+    debris: {fileID: 0}
+    debrisDensity: 0
+    capsule: 1
+  - name: SM_DST_Prop_Car_Wreck
+    mode: 0
+    mass: 900
+    refVolume: 11.137624
+    sourceScale: {x: 1, y: 1, z: 1}
+    breakSpeed: 0
+    minHitterMass: 0
+    debris: {fileID: 0}
+    debrisDensity: 0
+    capsule: 0

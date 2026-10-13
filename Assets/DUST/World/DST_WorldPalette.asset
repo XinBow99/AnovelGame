@@ -38,6 +38,7 @@ MonoBehaviour:
   - {fileID: 919132149155446097, guid: baba233f0d5e82c4f878830cb188ed1b, type: 3}
   wreck: {fileID: 919132149155446097, guid: 1100f6a38f27d23439f26cf10aff5e69, type: 3}
   brokenCrate: {fileID: 919132149155446097, guid: c2c961a4abf78a2408dc30d61c81aa2f, type: 3}
+  props: {fileID: 11400000, guid: 719140570f685d04ca710dcb3ce56332, type: 2}
   wallStraight:
   - {fileID: 919132149155446097, guid: 5ea9b6740b6afe443a50f46ce792d97e, type: 3}
   - {fileID: 919132149155446097, guid: 9346219f3f5ce5a4985d200d5f483c47, type: 3}

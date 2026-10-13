@@ -18,6 +18,7 @@ namespace DUST.World
         public GameObject[] pots;
         public GameObject wreck;
         public GameObject brokenCrate;
+        public DSTPropCatalog props;         // 每種擺設被撞到會怎樣（DSTWorldProp）
 
         [Header("Ruins (DR2 模組，4 m 一格)")]
         public GameObject[] wallStraight;

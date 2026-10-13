@@ -41,6 +41,7 @@ namespace DUST.World
             // 聚落：同樣只在中心點所在的區塊蓋
             var settlement = gen.SettlementCenteredIn(c);
             if (settlement != null && jobs != null) jobs.Add(DSTSettlementBuilder.Build(gen, pal, settlement, root.transform));
+            DSTWorldProp.Attach(root, gen.Seed, c.x, c.y, 1);     // 撞得倒、打得碎（聚落蓋完自己再編號）
             return root;
 
             void Place(GameObject[] set, float lx, float lz, float scale, float sink, bool alignToGround = false)
