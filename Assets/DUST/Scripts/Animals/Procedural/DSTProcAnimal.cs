@@ -6,23 +6,31 @@ using UnityEngine.AI;
 namespace DUST.Animals
 {
     // 程式生成物種的個體。連線只同步兩個東西：物種 key（外型、習性全部由它算出來）和目前姿勢（吃草 / 警戒 / 逃跑 / 死掉）。
-    // 每台電腦自己用 key 組身體、自己算腳步動作。AI 照舊用 DSTAnimal（只在主機跑）。
+    // 每台電腦自己用 key 從零件庫拼出身體、自己依移動速度播動畫。AI 照舊用 DSTAnimal（只在主機跑）。
     [RequireComponent(typeof(DSTAnimal))]
     public class DSTProcAnimal : NetworkBehaviour
     {
-        public Material template;      // HDRP/Lit 範本材質（毛色貼圖執行時產生）
+        public GameObject kit;                          // SK_DST_CreatureKit（Blender 零件庫）
+        public RuntimeAnimatorController controller;    // AC_CreatureKit（Speed / Graze / Alert）
+        public Material template;                       // HDRP/Lit 範本材質（毛色貼圖執行時產生）
 
         readonly NetworkVariable<int> _key = new NetworkVariable<int>();
         readonly NetworkVariable<byte> _pose = new NetworkVariable<byte>();
 
         public DSTGenome Genome { get; private set; }
         public int Key => _key.Value;
+        public CreaturePose Pose { get; private set; }
 
         DSTAnimal _animal;
-        DSTCreatureMotor _motor;
+        CreatureRig _rig;
         int _pendingKey;
         bool _built;
         float _nextLook;
+        Vector3 _lastPos;
+        float _speed, _deadT, _speedNorm;
+        static readonly int SpeedId = Animator.StringToHash("Speed");
+        static readonly int GrazeId = Animator.StringToHash("Graze");
+        static readonly int AlertId = Animator.StringToHash("Alert");
 
         // 說話（主機決定時機，種子傳給大家）
         AudioSource _voice;
@@ -53,21 +61,23 @@ namespace DUST.Animals
             if (_built) return;
             _built = true;
             Genome = DSTGenome.Get(key);
-            var rig = DSTCreatureBuilder.Build(Genome, transform, template);
+            _rig = DSTCreatureAssembler.Build(Genome, transform, kit, controller, template);
             // 同一物種的個體大小有一點差異（由連線 ID 決定，每台電腦一樣）
             float s = 1f + ((IsSpawned ? (int)(NetworkObjectId % 17) : 8) - 8) * 0.012f;
-            rig.root.localScale = Vector3.one * s;
-            _motor = gameObject.AddComponent<DSTCreatureMotor>();
-            _motor.Init(Genome, rig);
+            _rig.root.localScale *= s;
+            _rig.root.localPosition *= s;
+            _rig.restPosition = _rig.root.localPosition;
+            _speedNorm = Mathf.Max(0.2f, Genome.size * Genome.legLen * s);
+            _lastPos = transform.position;
 
             // 碰撞（揮拳打得到）與導航大小跟著體型
             var col = GetComponent<CapsuleCollider>();
             if (col)
             {
                 col.direction = 2;
-                col.center = new Vector3(0f, Genome.hipHeight * s, Genome.bodyLength * 0.1f * s);
+                col.center = new Vector3(0f, Genome.hipHeight * s, Genome.bodyLength * 0.15f * s);
                 col.radius = Genome.bodyRadius * 1.1f * s;
-                col.height = (Genome.bodyLength + Genome.headLength + Genome.neckLength * 0.5f) * s;
+                col.height = (Genome.bodyLength * 1.3f + Genome.neckLength) * s;
             }
             var agent = GetComponent<NavMeshAgent>();
             if (agent)
@@ -158,7 +168,7 @@ namespace DUST.Animals
 
         void Update()
         {
-            if (!_built || _motor == null) return;
+            if (!_built || _rig == null) return;
             if (IsServer || !IsSpawned)
             {
                 var p = _animal.IsAlive ? _animal.CurrentState switch
@@ -169,25 +179,46 @@ namespace DUST.Animals
                     _ => CreaturePose.Normal,
                 } : CreaturePose.Dead;
                 if (IsSpawned && _pose.Value != (byte)p) _pose.Value = (byte)p;
-                _motor.pose = p;
+                Pose = p;
             }
-            else _motor.pose = (CreaturePose)_pose.Value;
+            else Pose = (CreaturePose)_pose.Value;
+            Animate();
 
-            // 警戒時看最近的玩家（每台電腦自己找）
             if (Time.time > _nextLook)
             {
                 _nextLook = Time.time + 0.5f;
-                Transform best = null; float bd = float.MaxValue;
+                float bd = float.MaxValue;
                 foreach (var pl in DSTNetPlayer.All)
-                {
-                    if (!pl) continue;
-                    float d = (pl.transform.position - transform.position).sqrMagnitude;
-                    if (d < bd) { bd = d; best = pl.transform; }
-                }
-                _motor.lookTarget = best;
-                _nearest = best ? Mathf.Sqrt(bd) : float.MaxValue;
+                    if (pl) bd = Mathf.Min(bd, (pl.transform.position - transform.position).sqrMagnitude);
+                _nearest = bd < float.MaxValue ? Mathf.Sqrt(bd) : float.MaxValue;
             }
             if (IsServer || !IsSpawned) ThinkSpeech(_nearest);
+        }
+
+        // 速度從位移估（主機、客戶端都一樣）；動畫的速度參數換算成「零件庫原始大小」的速度，大隻的步伐自然變大
+        void Animate()
+        {
+            float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+            var d = transform.position - _lastPos; d.y = 0f;
+            _lastPos = transform.position;
+            float inst = d.magnitude / dt;
+            if (inst > 20f) inst = 0f;
+            _speed = Mathf.Lerp(_speed, inst, 1f - Mathf.Exp(-8f * dt));
+            var anim = _rig.animator;
+            if (Pose == CreaturePose.Dead)
+            {
+                // 側倒（沒有死亡動畫）：動畫停在最後一格，整隻轉 90°
+                if (anim.enabled) anim.speed = 0f;
+                _deadT = Mathf.Min(1f, _deadT + dt / 0.6f);
+                float e = Mathf.SmoothStep(0f, 1f, _deadT);
+                _rig.root.localRotation = Quaternion.Euler(0f, 180f, 85f * e);
+                _rig.root.localPosition = _rig.restPosition + new Vector3(0f, -Genome.hipHeight * 0.55f * e, 0f);
+                return;
+            }
+            anim.speed = 1f;
+            anim.SetFloat(SpeedId, _speed / _speedNorm, 0.1f, dt);
+            anim.SetBool(GrazeId, Pose == CreaturePose.Graze);
+            anim.SetBool(AlertId, Pose == CreaturePose.Alert);
         }
         float _nearest = float.MaxValue;
     }
