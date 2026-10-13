@@ -283,6 +283,27 @@ namespace DUST.Player
 
         bool HostAllowsCheats() => Local != null && Local._cheatsForAll.Value;
 
+        /// <summary>/summon：在自己前面生出這個地區名冊裡的第 slot 種（生成在主機上做）</summary>
+        public void RequestSummon(int slot)
+        {
+            if (IsOwner) SummonRpc(slot);
+        }
+
+        [Rpc(SendTo.Server)]
+        void SummonRpc(int slot, RpcParams rpc = default)
+        {
+            ulong sender = rpc.Receive.SenderClientId;
+            if (sender != NetworkManager.ServerClientId && !HostAllowsCheats()) return;
+            var spawner = DUST.Animals.DSTProcSpawner.Instance;
+            if (!spawner) return;
+            var roster = DUST.Animals.DSTEcology.At(transform.position);
+            if (slot < 0 || slot >= roster.keys.Length) return;
+            var at = transform.position + transform.forward * 4f;
+            if (UnityEngine.AI.NavMesh.SamplePosition(at, out var hit, 4f, UnityEngine.AI.NavMesh.AllAreas)) at = hit.position;
+            var g = DUST.Animals.DSTGenome.Get(roster.keys[slot]);
+            spawner.SpawnGroup(g.key, at, g.group.y);
+        }
+
         [Rpc(SendTo.Everyone)]
         void NoticeRpc(string text) => DUST.UI.DSTChat.System(text);
 

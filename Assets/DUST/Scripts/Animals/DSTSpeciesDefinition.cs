@@ -43,6 +43,7 @@ namespace DUST.Animals
         [Range(0, 1)] public float sniffChance = 0.35f;
         public float wanderRadius = 10f;
         public float fleeDistance = 16f;
+        [Range(0, 1)] public float herdCohesion = 0f;   // 0 獨居；越大越黏著同伴（閒逛時往群體中心靠，一隻跑全部跑）
 
         [Header("Spawning (Minecraft-style)")]
         public bool spawns = true;

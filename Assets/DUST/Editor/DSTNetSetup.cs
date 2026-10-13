@@ -126,7 +126,7 @@ namespace DUST.EditorTools
 
         // NGO 會自動把有 NetworkObject 的 Prefab 收進 DefaultNetworkPrefabs；
         // 只有現有清單都沒收到的才補進自己的清單，重複登記會報 duplicate GlobalObjectIdHash
-        static void RegisterPrefabs(NetworkManager nm, GameObject[] prefabs)
+        internal static void RegisterPrefabs(NetworkManager nm, GameObject[] prefabs)
         {
             var lists = nm.NetworkConfig.Prefabs.NetworkPrefabsLists;
             lists.RemoveAll(l => l == null);

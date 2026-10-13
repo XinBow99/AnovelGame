@@ -102,7 +102,7 @@ namespace DUST.Animals
             return true;
         }
 
-        static bool Visible(Camera cam, Vector3 p)
+        internal static bool Visible(Camera cam, Vector3 p)
         {
             if (cam == null) return false;
             Vector3 vp = cam.WorldToViewportPoint(p + Vector3.up * 0.3f);

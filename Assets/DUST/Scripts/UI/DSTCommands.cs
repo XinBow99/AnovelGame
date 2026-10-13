@@ -20,6 +20,7 @@ namespace DUST.UI
             "/tp <x> <z> | /tp <x> <y> <z> | /tp <玩家編號>　傳送",
             "/time <0-24 | 6:30 | day | noon | night | midnight>　調整時間",
             "/pos　目前座標　　/seed　世界種子　　/clear　清除聊天",
+            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群",
             "/cheats on|off　（房主）開放作弊指令給其他玩家",
         };
 
@@ -48,6 +49,20 @@ namespace DUST.UI
                     return;
                 case "clear":
                     DSTChat.Clear();
+                    return;
+                case "species":
+                    var roster = DUST.Animals.DSTEcology.At(me.transform.position);
+                    float hour = DUST.Animals.DSTEcology.Hour;
+                    DSTChat.System($"{roster.region} 的物種：");
+                    for (int i = 0; i < roster.keys.Length; i++)
+                    {
+                        var g = DUST.Animals.DSTGenome.Get(roster.keys[i]);
+                        bool awake = DUST.Animals.DSTEcology.ActiveAt(g.activity, hour);
+                        int alive = DUST.Animals.DSTProcSpawner.Instance ? DUST.Animals.DSTProcSpawner.Instance.Alive(g.key) : 0;
+                        string herd = g.group.y > 2 ? $"群居 {g.group.x}-{g.group.y} 隻" : "獨居";
+                        DSTChat.System($"{i + 1}. {g.name}（{g.scientificName}）{DUST.Animals.DSTEcology.ActivityName(g.activity)}、{DUST.Animals.DSTEcology.TerrainName(g.terrain)}、{herd}　{(awake ? "活動中" : "休息中")}" +
+                                       (NetworkManager.Singleton && NetworkManager.Singleton.IsServer ? $"　附近 {alive} 隻" : ""));
+                    }
                     return;
             }
 
@@ -94,6 +109,11 @@ namespace DUST.UI
                 case "tp":
                     if (!OnFoot(me)) return;
                     Teleport(me, args);
+                    return;
+
+                case "summon":
+                    if (args.Length < 2 || !int.TryParse(args[1], out int slot)) { DSTChat.System("用法：/summon 1（編號看 /species）"); return; }
+                    me.RequestSummon(slot - 1);
                     return;
 
                 case "time":

@@ -9200,6 +9200,9 @@ MonoBehaviour:
   positionDamping: 6
   rotationDamping: 4
   cockpit: 0
+  mouseSensitivity: 0.1
+  recenterDelay: 1.5
+  recenterSpeed: 2.5
 --- !u!114 &136179611
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -31966,6 +31969,58 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 94691d929138df1419df7465e90229a8, type: 3}
   m_PrefabInstance: {fileID: 520183758}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &520760431
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 520760433}
+  - component: {fileID: 520760432}
+  m_Layer: 0
+  m_Name: ProcAnimalSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &520760432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 520760431}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6131080d1f376c74b81ccc36f32d1756, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Animals.DSTProcSpawner
+  prefab: {fileID: 1970981352901822446, guid: fb5a296bfb7a9ed44883cc0f9039ba84, type: 3}
+  tickInterval: 2
+  attemptsPerTick: 6
+  maxTotal: 24
+  minSpawnDistance: 16
+  maxSpawnDistance: 45
+  despawnDistance: 75
+  sleepDistance: 25
+--- !u!4 &520760433
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 520760431}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &521434976
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -143105,3 +143160,4 @@ SceneRoots:
   - {fileID: 560044142}
   - {fileID: 905559646}
   - {fileID: 801644406}
+  - {fileID: 520760433}

@@ -24,6 +24,11 @@ namespace DUST.Animals
         public bool IsAlive => CurrentState != State.Dead && !_dead.Value;
         public event System.Action<DSTAnimal> Removed;
 
+        // 群居用：找同物種的同伴（只在主機上用到）
+        static readonly List<DSTAnimal> _all = new List<DSTAnimal>();
+        void OnEnable() => _all.Add(this);
+        void OnDisable() => _all.Remove(this);
+
         NavMeshAgent _agent;
         Animator _anim;
         NetworkAnimator _netAnim;
@@ -68,6 +73,7 @@ namespace DUST.Animals
 
         public override void OnDestroy()
         {
+            _all.Remove(this);
             Removed?.Invoke(this);
             base.OnDestroy();
         }
@@ -174,7 +180,15 @@ namespace DUST.Animals
                     break;
                 case State.Wander:
                     _agent.speed = species.walkSpeed;
-                    if (RandomPoint(transform.position, species.wanderRadius, out var p)) Go(p);
+                    // 群居的往同伴中心靠，閒逛範圍也小一點
+                    var center = transform.position;
+                    float radius = species.wanderRadius;
+                    if (species.herdCohesion > 0f && HerdCenter(out var hc))
+                    {
+                        center = Vector3.Lerp(center, hc, species.herdCohesion);
+                        radius *= 1f - species.herdCohesion * 0.6f;
+                    }
+                    if (RandomPoint(center, radius, out var p)) Go(p);
                     else { Enter(State.Idle); return; }
                     _stateUntil = Time.time + 20f;
                     break;
@@ -190,10 +204,37 @@ namespace DUST.Animals
             }
         }
 
-        void StartFlee(Transform from)
+        void StartFlee(Transform from, bool alarmHerd = true)
         {
             _threat = from;
             Enter(State.Flee);
+            if (alarmHerd && species.herdCohesion > 0f) AlarmHerd(from);
+        }
+
+        // 一隻跑，附近的同伴跟著跑（同伴不會再往外傳，避免連鎖到整張地圖）
+        void AlarmHerd(Transform threat)
+        {
+            float r = 6f + species.herdCohesion * 8f;
+            foreach (var o in _all)
+                if (o != this && o.species == species && o.IsAlive && o.CurrentState != State.Flee &&
+                    (o.transform.position - transform.position).sqrMagnitude < r * r)
+                    o.StartFlee(threat, false);
+        }
+
+        bool HerdCenter(out Vector3 center)
+        {
+            center = Vector3.zero;
+            int n = 0;
+            foreach (var o in _all)
+            {
+                if (o == this || o.species != species || !o.IsAlive) continue;
+                if ((o.transform.position - transform.position).sqrMagnitude > 400f) continue;   // 20 m 內
+                center += o.transform.position;
+                n++;
+            }
+            if (n == 0) return false;
+            center /= n;
+            return true;
         }
 
         void PickFleeDestination()
