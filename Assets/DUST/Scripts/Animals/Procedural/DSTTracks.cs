@@ -67,7 +67,7 @@ namespace DUST.Animals
             double now = DSTMigration.Now;
             float r2 = viewRange * viewRange;
             _prints.Clear();
-            double stormEnd = DSTClockwork.LastStormEnd(now);     // 沙暴吹過，之前的腳印都平了
+            double stormEnd = DSTClockwork.LastStormEnd(now, DSTClockwork.Flat(v));     // 沙暴吹過這裡，之前的腳印都平了
 
             // ---- 遷徙路線往回推算
             DSTMigration.Near(v, viewRange, _bands);

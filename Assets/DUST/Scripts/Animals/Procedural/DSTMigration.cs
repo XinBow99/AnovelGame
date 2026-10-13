@@ -142,7 +142,8 @@ namespace DUST.Animals
         public bool RouteAt(double totalHours, out Path path, out float s)
         {
             path = _loop; s = 0f;
-            if (DSTClockwork.Storm(totalHours) > 0.5f || DSTAnomaly.Shelter(totalHours)) return false;
+            var here = DSTClockwork.Flat(center);          // 沙暴、異象都是區域性的：看這群動物的地盤有沒有被罩住
+            if (DSTClockwork.StormAt(totalHours, here) > 0.5f || DSTAnomaly.Shelter(totalHours, here)) return false;
             double day = System.Math.Floor(totalHours / 24.0);
             for (int d = -1; d <= 0; d++)
                 foreach (var (start, dur) in _trips)

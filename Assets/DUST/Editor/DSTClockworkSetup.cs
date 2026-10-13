@@ -20,6 +20,7 @@ namespace DUST.EditorTools
             var dust = Unlit("M_DST_StormDust", Save("T_DST_Dust", 64, 64, Dot, false), new Color(0.82f, 0.62f, 0.42f, 0.32f), additive: false, fog: true);
             var meteor = Unlit("M_DST_Meteor", Save("T_DST_Streak", 128, 32, Streak, false), Color.white, additive: true, fog: false);
             var glow = Unlit("M_DST_Glow", Save("T_DST_Glow", 8, 32, (u, v) => new Color(1f, 1f, 1f, Mathf.Exp(-Mathf.Pow((v - 0.5f) * 5f, 2f))), false), Color.white, additive: true, fog: false);
+            var dome = Unlit("M_DST_Dome", Save("T_DST_Dome", 256, 128, Dome, false), Color.white, additive: false, fog: false);
             var rock = MeteoriteMaterial();
             var scorch = Decal("M_DST_Scorch", Save("T_DST_Scorch", 256, 256, Scorch, false), null);
             var runes = Runes(out var runesN);
@@ -48,6 +49,10 @@ namespace DUST.EditorTools
             anomalies.glowMaterial = glow;
             anomalies.dustMaterial = dust;
             EditorUtility.SetDirty(anomalies);
+            var domes = go.GetComponent<DSTRegionDomes>();
+            if (!domes) domes = go.AddComponent<DSTRegionDomes>();
+            domes.domeMaterial = dome;
+            EditorUtility.SetDirty(domes);
             EditorUtility.SetDirty(weather);
             EditorUtility.SetDirty(sky);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -95,6 +100,18 @@ namespace DUST.EditorTools
         }
 
         // 流星：u 沿著長度（0 尾 → 1 頭），v 橫向
+        // 遠方的沙牆 / 異象霧罩：底下濃、往上淡，頂端是翻騰的雲頭（u 方向首尾相接）
+        static Color Dome(float u, float v)
+        {
+            float tau = Mathf.PI * 2f;
+            float n = 0.5f + 0.22f * Mathf.Sin(tau * 3f * u + v * 4f) + 0.16f * Mathf.Sin(tau * 7f * u - v * 9f) + 0.12f * Mathf.Sin(tau * 13f * u + v * 15f);
+            float top = 0.55f + 0.35f * n;                                  // 雲頭的高度
+            float a = Mathf.Pow(Mathf.Clamp01(1f - v / Mathf.Max(0.05f, top)), 0.35f);
+            a *= 0.78f + 0.22f * n;                                         // 一條條的濃淡
+            float shade = 0.82f + 0.18f * n;                                // 亮暗不一，看起來有體積
+            return new Color(shade, shade, shade, a);
+        }
+
         static Color Streak(float u, float v)
         {
             float across = Mathf.Exp(-Mathf.Pow((v - 0.5f) * 5f, 2f));

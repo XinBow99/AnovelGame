@@ -16,6 +16,16 @@ namespace DUST.World
 
         public static float Intensity { get; private set; }
         public static float Flash;                 // 閃電（DSTAnomalies 設定，每幀衰減）
+        /// <summary>天氣是看哪裡算的（鏡頭的位置，沒有鏡頭就是出生點）</summary>
+        public static Vector2 Here { get; private set; }
+
+        readonly System.Collections.Generic.List<DSTClockwork.Storm> _near = new System.Collections.Generic.List<DSTClockwork.Storm>();
+
+        public static Vector2 Viewer()
+        {
+            var cam = Camera.main;
+            return cam ? DSTClockwork.Flat(cam.transform.position) : Vector2.zero;
+        }
 
         Fog _fog;
         float _baseMfp, _baseHeight, _baseMaxHeight;
@@ -33,11 +43,21 @@ namespace DUST.World
 
         void Update()
         {
-            float k = DSTClockwork.Storm(DSTClockwork.Now);
+            // 沙暴是區域性的：看鏡頭所在的地方
+            double now = DSTClockwork.Now;
+            Here = Viewer();
+            float k = DSTClockwork.StormAt(now, Here);
             Intensity = k;
-            // 風向：每天不一樣，沙暴當中慢慢擺動
-            float day = DSTClockwork.DayOf(DSTClockwork.Now);
-            float yaw = DSTNoise.Hash01(DSTClockwork.Seed, (int)day, 0, 7110) * 360f + Mathf.Sin(Time.time * 0.07f) * 20f;
+            // 快到了：遠遠聽得到風暴的低吼
+            float near = 0f;
+            DSTClockwork.StormsNear(now, Here, 1500f, _near);
+            foreach (var s in _near)
+            {
+                float edge = (s.CenterAt(now) - Here).magnitude - s.radius;
+                near = Mathf.Max(near, s.TimeK(now) * Mathf.Clamp01(1f - edge / 1500f));
+            }
+            // 風向：每天不一樣（沙暴也順著它走），吹的時候慢慢擺動
+            float yaw = DSTClockwork.WindYaw(DSTClockwork.DayOf(now)) + Mathf.Sin(Time.time * 0.07f) * 20f;
             _windDir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
 
             ApplyFog(k);
@@ -45,7 +65,7 @@ namespace DUST.World
             if (_wind)
             {
                 float gust = 0.75f + 0.25f * Mathf.PerlinNoise(Time.time * 0.35f, 3.1f);
-                _wind.volume = Mathf.Lerp(_wind.volume, k * 0.55f * gust, Time.deltaTime * 2f);
+                _wind.volume = Mathf.Lerp(_wind.volume, Mathf.Max(k * 0.55f, near * 0.18f) * gust, Time.deltaTime * 2f);
                 if (_wind.volume > 0.005f && !_wind.isPlaying) _wind.Play();
                 else if (_wind.volume <= 0.005f && _wind.isPlaying) _wind.Stop();
             }
@@ -57,7 +77,7 @@ namespace DUST.World
             var tod = DSTTimeOfDay.Instance;
             if (!tod || !tod.sun || !tod.sun.enabled) return;
             if (Intensity > 0f) tod.sun.intensity *= Mathf.Lerp(1f, stormSunDim, Intensity);
-            float ak = DSTAnomaly.Current(DSTClockwork.Now, out var an);
+            float ak = DSTAnomaly.Current(DSTClockwork.Now, Here, out var an);
             if (ak > 0f) tod.sun.intensity *= Mathf.Lerp(1f, an.sun, ak);
         }
 
@@ -69,7 +89,7 @@ namespace DUST.World
                 if (!w || !w.fogVolume || !w.fogVolume.profile.TryGet(out _fog)) return;
             }
             // 異象的顏色霧（DSTAnomaly）疊在沙暴之上
-            float ak = DSTAnomaly.Current(DSTClockwork.Now, out var an);
+            float ak = DSTAnomaly.Current(DSTClockwork.Now, Here, out var an);
             float haze = ak * an.hazeAmount;
             if (k <= 0f && haze <= 0f && Flash <= 0f)
             {

@@ -151,35 +151,43 @@ namespace DUST.World
             return "沙與星，都照著同一座鐘走。";
         }
 
+        // 刻文講的都是「這附近」會發生的事
+        Vector2 Here => DSTClockwork.Flat(transform.position);
+
         string MeteorClue(int today)
         {
+            var list = new List<(double land, Vector2 where)>();
             for (int d = today; d < today + 10; d++)
             {
-                if (!DSTClockwork.Meteorite(d, out double land, out var where) || land < DSTClockwork.Now) continue;
-                var to = new Vector3(where.x, 0f, where.y) - transform.position;
-                return $"第 {d + 1} 夜，{Hm(land)}，一顆星墜於{Compass(to)}方，約 {Round(to)} 公尺。";
+                DSTClockwork.MeteoritesNear(d, Here, list);
+                float best = float.MaxValue; double bland = 0; Vector2 bw = default;
+                foreach (var (land, w) in list)
+                {
+                    float dist = (w - Here).magnitude;
+                    if (land < DSTClockwork.Now || dist > 3000f || dist >= best) continue;
+                    best = dist; bland = land; bw = w;
+                }
+                if (best < float.MaxValue)
+                    return $"第 {d + 1} 夜，{Hm(bland)}，一顆星墜於{DSTClockwork.Compass(bw - Here)}方，約 {DSTClockwork.Distance(best)}。";
             }
             return null;
         }
 
         string StormClue(double now, int today)
         {
-            for (int d = today; d < today + 8; d++)
-            {
-                if (!DSTClockwork.StormOn(d, out float start, out float dur) || d * 24.0 + start < now) continue;
-                return $"第 {d + 1} 天 {Hm(d * 24.0 + start)}，風沙吞沒天空，萬獸歸巢。";
-            }
-            return null;
+            if (!DSTClockwork.NextStormAt(Here, now, 8, out var s, out double arrive)) return null;
+            // 從哪邊來：風暴經過這裡之前的位置
+            var from = s.CenterAt(arrive - 0.5) - Here;
+            return $"第 {DSTClockwork.DayOf(arrive) + 1} 天 {Hm(arrive)}，風沙自{DSTClockwork.Compass(from)}方吞沒此地，萬獸歸巢。";
         }
 
         string AnomalyClue(double now, int today)
         {
-            for (int d = today; d < today + 8; d++)
-            {
-                if (!DSTAnomaly.On(d, out var e) || e.StartAt < now) continue;
-                return $"第 {d + 1} 天 {Hm(e.StartAt)}，{e.FullName}將至。";
-            }
-            return null;
+            if (!DSTAnomaly.Upcoming(Here, now, 8, 4000f, out var e)) return null;
+            var to = e.center - Here;
+            float edge = to.magnitude - e.radius;
+            string where = edge <= 0f ? "於此地" : $"於{DSTClockwork.Compass(to)}方約 {DSTClockwork.Distance(edge)}外";
+            return $"第 {DSTClockwork.DayOf(e.StartAt) + 1} 天 {Hm(e.StartAt)}，{e.FullName}將降臨{where}。";
         }
 
         string GatherClue(double now, int today)

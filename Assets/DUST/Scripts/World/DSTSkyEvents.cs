@@ -27,7 +27,8 @@ namespace DUST.World
         LineRenderer _beacon;
         DecalProjector _scorch;
         Material _rockMat;
-        double _fallShownFor = double.NaN;
+        readonly HashSet<double> _fallShown = new HashSet<double>();
+        readonly List<(double, Vector2)> _falls = new List<(double, Vector2)>();
 
         void Update()
         {
@@ -47,15 +48,17 @@ namespace DUST.World
                 _lastSlot = slot;
             }
 
-            // ---- 會落地的那一顆：落地前幾秒劃出一道往地平線的火光
+            // ---- 會落地的那幾顆（附近每一區各一顆）：落地前幾秒劃出一道往地平線的火光
             int day = DSTClockwork.DayOf(now);
             for (int d = day - 1; d <= day; d++)
             {
-                if (!DSTClockwork.Meteorite(d, out double land, out var where)) continue;
-                double lead = 2.5 / sph;
-                if (now >= land - lead && now < land && !_fallShownFor.Equals(land))
+                DSTClockwork.MeteoritesNear(d, DSTClockwork.Flat(cam.transform.position), _falls);
+                foreach (var (land, where) in _falls)
                 {
-                    _fallShownFor = land;
+                double lead = 2.5 / sph;
+                if (now >= land - lead && now < land && _fallShown.Add(land))
+                {
+                    if (_fallShown.Count > 32) { _fallShown.Clear(); _fallShown.Add(land); }
                     var p = cam.transform.position;
                     var to = new Vector3(where.x - p.x, 0f, where.y - p.y);
                     var fm = new DSTClockwork.Meteor
@@ -64,6 +67,7 @@ namespace DUST.World
                         azimuth = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, elevation = 38f, heading = 180f,
                     };
                     Spawn(fm, true);
+                }
                 }
             }
 
@@ -133,7 +137,7 @@ namespace DUST.World
         {
             var w = DSTWorld.Instance;
             Vector2 where = default;
-            float heat = w && w.IsRandom && w.Gen != null ? DSTClockwork.MeteoriteHeat(now, out where, out _) : 0f;
+            float heat = w && w.IsRandom && w.Gen != null ? DSTClockwork.MeteoriteHeat(now, DSTClockwork.Flat(cam.transform.position), out where, out _) : 0f;
             if (heat <= 0f)
             {
                 if (_rock) _rock.SetActive(false);

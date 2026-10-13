@@ -135,11 +135,47 @@ namespace DUST.UI
                     for (int d = today; d < today + 4; d++)
                     {
                         var parts = new System.Collections.Generic.List<string>();
-                        if (DSTClockwork.StormOn(d, out float st, out float du)) parts.Add($"沙暴 {Clock(d * 24.0 + st)}~{Clock(d * 24.0 + st + du)}");
-                        if (DSTAnomaly.On(d, out var an))
-                            parts.Add($"異象{an.FullName} {Clock(an.StartAt)}~{Clock(an.EndAt)}");
-                        if (DSTClockwork.Meteorite(d, out double land, out var where))
-                            parts.Add($"流星雨 21:00~03:00，隕石 {Clock(land)} 落在 ({where.x:0}, {where.y:0})");
+                        // 事件都是區域性的：只列這附近的
+                        var me2 = DSTClockwork.Flat(me.transform.position);
+                        int scx = DSTClockwork.Cell(me2.x, DSTClockwork.StormCell), scz = DSTClockwork.Cell(me2.y, DSTClockwork.StormCell);
+                        for (int x = scx - 3; x <= scx + 3; x++)
+                        for (int z = scz - 3; z <= scz + 3; z++)
+                        {
+                            if (!DSTClockwork.StormIn(d, x, z, out var s)) continue;
+                            if (DSTClockwork.Pass(s, me2, out double tin, out double tout))
+                                parts.Add($"沙暴經過這裡 {Clock(tin)}~{Clock(tout)}（從{DSTClockwork.Compass(s.CenterAt(tin - 0.5) - me2)}方來）");
+                            else
+                            {
+                                // 沒經過，但離得不遠：遠遠看得到
+                                float closest = float.MaxValue; double when = s.start;
+                                for (double tt = s.start; tt <= s.End; tt += 0.25)
+                                {
+                                    float dd = (s.CenterAt(tt) - me2).magnitude - s.radius;
+                                    if (dd < closest) { closest = dd; when = tt; }
+                                }
+                                if (closest < 2500f) parts.Add($"沙暴 {Clock(when)} 在{DSTClockwork.Compass(s.CenterAt(when) - me2)}方 {DSTClockwork.Distance(closest)}外掠過");
+                            }
+                        }
+                        int acx = DSTClockwork.Cell(me2.x, DSTAnomaly.CellSize), acz = DSTClockwork.Cell(me2.y, DSTAnomaly.CellSize);
+                        for (int x = acx - 1; x <= acx + 1; x++)
+                        for (int z = acz - 1; z <= acz + 1; z++)
+                        {
+                            if (!DSTAnomaly.On(d, x, z, out var an)) continue;
+                            var to = an.center - me2;
+                            float edge = to.magnitude - an.radius;
+                            if (edge > 5000f) continue;
+                            string where = edge <= 0f ? "就在這裡" : $"{DSTClockwork.Compass(to)}方 {DSTClockwork.Distance(edge)}";
+                            parts.Add($"異象{an.FullName} {Clock(an.StartAt)}~{Clock(an.EndAt)}（{where}）");
+                        }
+                        if (DSTClockwork.ShowerNight(d))
+                        {
+                            var met = new System.Collections.Generic.List<(double, Vector2)>();
+                            DSTClockwork.MeteoritesNear(d, me2, met);
+                            var falls = new System.Collections.Generic.List<string>();
+                            foreach (var (land, w) in met)
+                                if ((w - me2).magnitude < 3000f) falls.Add($"{Clock(land)} {DSTClockwork.Compass(w - me2)}方 {DSTClockwork.Distance((w - me2).magnitude)}");
+                            parts.Add("流星雨 21:00~03:00" + (falls.Count > 0 ? "，隕石：" + string.Join("、", falls) : ""));
+                        }
                         if (DUST.Animals.DSTMigration.Available)
                         {
                             var bands = new System.Collections.Generic.List<DUST.Animals.DSTBand>();

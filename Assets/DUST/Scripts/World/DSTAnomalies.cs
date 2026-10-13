@@ -35,7 +35,6 @@ namespace DUST.World
         // ---- 快報
         string _bulletin;
         float _bulletinUntil;
-        double _announced = double.NaN;
         GUIStyle _big, _small;
 
         public static float Intensity { get; private set; }
@@ -66,11 +65,14 @@ namespace DUST.World
         {
             var cam = Camera.main;
             double now = DSTClockwork.Now;
-            float k = DSTAnomaly.Current(now, out var e);
+            // 異象是區域性的：效果看鏡頭所在的地方，閃電和快報看附近幾公里
+            var here = cam ? DSTClockwork.Flat(cam.transform.position) : Vector2.zero;
+            float k = DSTAnomaly.Current(now, here, out var e);
             Intensity = k;
+            DSTAnomaly.ActiveNear(now, here, ViewRange, _active);
             DSTWeather.Flash = Mathf.MoveTowards(DSTWeather.Flash, 0f, Time.deltaTime * 6f);
 
-            Announce(now, k, e);
+            Announce(here);
             if (!cam) return;
             UpdateBolts(cam, now);
             UpdateFall(cam, k, e);
@@ -78,14 +80,28 @@ namespace DUST.World
             UpdateHalo(cam, k, e);
         }
 
-        // ------------------------------------------------------------------ 快報：開始時在畫面上方出現幾秒（像新聞插播）
-        void Announce(double now, float k, DSTAnomaly.Event e)
+        public const float ViewRange = 3500f;          // 多遠的異象看得到（閃電）、會插播快報
+        readonly List<DSTAnomaly.Event> _active = new List<DSTAnomaly.Event>();
+        readonly HashSet<long> _announcedSet = new HashSet<long>();
+
+        static long EventKey(in DSTAnomaly.Event e) => ((long)e.day << 40) ^ ((long)(e.cx & 0xFFFFF) << 20) ^ (e.cz & 0xFFFFF);
+
+        // ------------------------------------------------------------------ 快報：附近有異象開始（或走進看得到的範圍）時，在畫面上方出現幾秒，說在哪個方向
+        void Announce(Vector2 here)
         {
-            if (k <= 0f || _announced.Equals(e.StartAt)) return;
-            _announced = e.StartAt;
-            _bulletin = e.FullName;
-            _bulletinUntil = Time.time + 9f;
+            foreach (var e in _active)
+            {
+                if (!_announcedSet.Add(EventKey(e))) continue;
+                if (_announcedSet.Count > 64) { _announcedSet.Clear(); _announcedSet.Add(EventKey(e)); }
+                var to = e.center - here;
+                float edge = to.magnitude - e.radius;
+                _bulletinWhere = edge <= 0f ? "就在這裡" : $"{DSTClockwork.Compass(to)}方 {DSTClockwork.Distance(edge)}";
+                _bulletin = e.FullName;
+                _bulletinUntil = Time.time + 9f;
+            }
         }
+
+        string _bulletinWhere;
 
         void OnGUI()
         {
@@ -97,6 +113,7 @@ namespace DUST.World
             var r = new Rect(0, Screen.height * 0.16f, Screen.width, 44);
             Shadowed(new Rect(r.x, r.y - 30, r.width, 26), "— 異 象 —", _small, new Color(0.95f, 0.8f, 0.55f, a));
             Shadowed(r, _bulletin, _big, new Color(1f, 0.96f, 0.9f, a));
+            Shadowed(new Rect(r.x, r.y + 44, r.width, 26), _bulletinWhere, _small, new Color(0.95f, 0.9f, 0.8f, a));
         }
 
         static void Shadowed(Rect r, string text, GUIStyle s, Color c)
@@ -107,7 +124,7 @@ namespace DUST.World
             GUI.Label(r, text, s);
         }
 
-        // ------------------------------------------------------------------ 乾雷：不下雨的閃電，遠處打下來，聲音照距離晚到
+        // ------------------------------------------------------------------ 乾雷：不下雨的閃電，打在異象區域裡（遠遠也看得到），聲音照距離晚到
         void UpdateBolts(Camera cam, double now)
         {
             if (!glowMaterial) return;
@@ -115,26 +132,32 @@ namespace DUST.World
             long slot = (long)System.Math.Floor(now / DSTAnomaly.BoltSlotHours);
             if (slot != _lastSlot)
             {
-                for (long s = slot - 1; s <= slot; s++)
-                    if (!_shown.Contains(s) && DSTAnomaly.BoltIn(s, out var b)) { _shown.Add(s); SpawnBolt(cam, b); }
-                if (_shown.Count > 64) _shown.Clear();
+                foreach (var e in _active)
+                    for (long s = slot - 1; s <= slot; s++)
+                    {
+                        long key = s * 1000003L ^ EventKey(e);
+                        if (!_shown.Contains(key) && DSTAnomaly.BoltIn(s, e, out var b)) { _shown.Add(key); SpawnBolt(cam, b); }
+                    }
+                if (_shown.Count > 256) _shown.Clear();
                 _lastSlot = slot;
             }
 
+            var eye = cam.transform.position;
             float flashLight = 0f;
             for (int i = _strikes.Count - 1; i >= 0; i--)
             {
                 var st = _strikes[i];
+                float dist = Vector3.Distance(new Vector3(eye.x, st.ground.y, eye.z), st.ground);
                 float age = (float)((now - st.b.at) * sph);              // 真實秒數
-                if (!st.thundered && age > st.b.distance / 343f)
+                if (!st.thundered && age > dist / 343f)
                 {
                     st.thundered = true;
-                    PlayThunder(st.b.distance);
+                    if (dist < 5000f) PlayThunder(dist);
                 }
                 if (age > 0.6f)
                 {
                     st.line.enabled = false;
-                    if (st.thundered) { _pool.Push(st.line); _strikes.RemoveAt(i); }
+                    if (st.thundered || age > 16f) { _pool.Push(st.line); _strikes.RemoveAt(i); }
                     continue;
                 }
                 if (age < 0f) { st.line.enabled = false; continue; }
@@ -144,7 +167,9 @@ namespace DUST.World
                 st.line.enabled = on > 0.02f;
                 _mpb.SetColor(ColorId, new Color(0.75f, 0.8f, 1f) * (on * 40f));
                 st.line.SetPropertyBlock(_mpb);
-                float near = Mathf.Clamp01(1f - st.b.distance / 1200f);
+                float width = Mathf.Clamp(dist * 0.004f, 0.8f, 12f);     // 遠的粗一點才看得到
+                st.line.startWidth = width; st.line.endWidth = width * 0.6f;
+                float near = Mathf.Clamp01(1f - dist / 1200f);
                 if (on * near > flashLight)
                 {
                     flashLight = on * near;
@@ -161,24 +186,22 @@ namespace DUST.World
         {
             var line = _pool.Count > 0 ? _pool.Pop() : NewLine("Bolt", 14);
             var rng = new System.Random(b.shape);
-            var dir = Quaternion.Euler(0f, b.azimuth, 0f) * Vector3.forward;
-            var p = cam.transform.position;
-            var ground = p + dir * b.distance;
             var w = DSTWorld.Instance;
-            ground.y = w && w.IsRandom && w.Gen != null ? w.Gen.Height(ground.x, ground.z) : p.y - 2f;
+            var ground = new Vector3(b.where.x, 0f, b.where.y);
+            ground.y = w && w.IsRandom && w.Gen != null ? w.Gen.Height(ground.x, ground.z) : cam.transform.position.y - 2f;
             var top = ground + Vector3.up * (260f + (float)rng.NextDouble() * 120f);
-            var side = Vector3.Cross(dir, Vector3.up);
+            float a = (float)rng.NextDouble() * Mathf.PI * 2f;
+            var side = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var side2 = new Vector3(-side.z, 0f, side.x);
             int n = line.positionCount;
             for (int i = 0; i < n; i++)
             {
                 float t = i / (float)(n - 1);
                 var q = Vector3.Lerp(top, ground, t);
                 if (i > 0 && i < n - 1)
-                    q += side * ((float)rng.NextDouble() - 0.5f) * 40f + dir * ((float)rng.NextDouble() - 0.5f) * 25f;
+                    q += side * ((float)rng.NextDouble() - 0.5f) * 40f + side2 * ((float)rng.NextDouble() - 0.5f) * 25f;
                 line.SetPosition(i, q);
             }
-            float width = Mathf.Clamp(b.distance * 0.004f, 0.8f, 4f);
-            line.startWidth = width; line.endWidth = width * 0.6f;
             line.enabled = false;
             _strikes.Add(new Strike { line = line, b = b, ground = ground });
         }
