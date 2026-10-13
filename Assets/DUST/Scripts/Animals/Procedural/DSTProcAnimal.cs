@@ -61,7 +61,9 @@ namespace DUST.Animals
             if (_built) return;
             _built = true;
             Genome = DSTGenome.Get(key);
-            _rig = DSTCreatureAssembler.Build(Genome, transform, kit, controller, template);
+            var snap = GetComponent<DSTGroundSnap>();
+            if (!snap) snap = gameObject.AddComponent<DSTGroundSnap>();
+            _rig = DSTCreatureAssembler.Build(Genome, snap.EnsurePivot(), kit, controller, template);
             // 同一物種的個體大小有一點差異（由連線 ID 決定，每台電腦一樣）
             float s = 1f + ((IsSpawned ? (int)(NetworkObjectId % 17) : 8) - 8) * 0.012f;
             _rig.root.localScale *= s;

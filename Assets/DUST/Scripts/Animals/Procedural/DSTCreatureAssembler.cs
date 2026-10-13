@@ -68,7 +68,7 @@ namespace DUST.Animals
             float minY = float.MaxValue;
             foreach (var n in new[] { "Toes_L", "Toes_R", "HToes_L", "HToes_R" })
                 if (bones.TryGetValue(n, out var toe)) minY = Mathf.Min(minY, parent.InverseTransformPoint(toe.position).y);
-            if (minY < float.MaxValue) inst.transform.localPosition = new Vector3(0f, -minY + 0.004f * g.size, 0f);
+            if (minY < float.MaxValue) inst.transform.localPosition = new Vector3(0f, -minY + 0.009f * g.size, 0f);   // 腳趾骨在肉墊裡面，墊高一點皮膚才剛好碰地
 
             var anim = inst.GetComponent<Animator>() ?? inst.AddComponent<Animator>();
             anim.runtimeAnimatorController = controller;

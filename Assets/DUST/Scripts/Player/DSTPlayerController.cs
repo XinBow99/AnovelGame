@@ -241,7 +241,8 @@ namespace DUST.Player
             float target = _crouching ? crouchHeight : standHeight;
             _currentHeight = Mathf.MoveTowards(_currentHeight, target, 6f * dt);
             _cc.height = _currentHeight;
-            _cc.center = Vector3.up * (_currentHeight * 0.5f);
+            // 膠囊往上移一個皮膚厚度：CharacterController 的膠囊會停在離地 skinWidth 的地方，這樣角色原點才剛好貼地（不然整隻浮 2 cm）
+            _cc.center = Vector3.up * (_currentHeight * 0.5f + _cc.skinWidth);
             if (head) head.localPosition = new Vector3(0f, _currentHeight - eyeBelowTop, headForward);
         }
 

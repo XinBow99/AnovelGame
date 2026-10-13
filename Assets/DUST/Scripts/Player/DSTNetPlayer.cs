@@ -220,7 +220,7 @@ namespace DUST.Player
             if (_cc && _cc.enabled)
             {
                 _cc.height = _remoteHeight;
-                _cc.center = Vector3.up * (_remoteHeight * 0.5f);
+                _cc.center = Vector3.up * (_remoteHeight * 0.5f + _cc.skinWidth);
             }
         }
 

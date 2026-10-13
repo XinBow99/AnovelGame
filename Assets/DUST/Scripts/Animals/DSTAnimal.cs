@@ -46,6 +46,8 @@ namespace DUST.Animals
 
         void Awake()
         {
+            // 外觀貼地（導航網格比真正的地面高低差幾公分）
+            if (!GetComponent<DSTGroundSnap>()) gameObject.AddComponent<DSTGroundSnap>();
             _agent = GetComponent<NavMeshAgent>();
             _anim = GetComponentInChildren<Animator>();
             _netAnim = GetComponentInChildren<NetworkAnimator>();
