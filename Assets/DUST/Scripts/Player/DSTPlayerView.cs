@@ -16,7 +16,7 @@ namespace DUST.Player
         public float lookHeight = 0.32f;
         public float actionDistance = 1.7f;     // 上下車時拉遠一點
         public float damping = 10f;
-        public float freeLookReturnDelay = 0.6f;  // 放開 Alt 後先停一下，再轉回來
+        public float freeLookReturnDelay = 15f;   // 放開 Alt 後先停一下，再轉回來
         public float freeLookReturnTime = 0.9f;   // 轉回來大約花多久（緩起緩停，太快會暈）
 
         public bool ThirdPerson { get; private set; }

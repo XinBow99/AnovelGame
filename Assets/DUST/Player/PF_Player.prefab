@@ -179,7 +179,7 @@ MonoBehaviour:
   lookHeight: 0.32
   actionDistance: 1.7
   damping: 10
-  freeLookReturnDelay: 0.6
+  freeLookReturnDelay: 15
   freeLookReturnTime: 0.9
 --- !u!114 &2660897622994969484
 MonoBehaviour:

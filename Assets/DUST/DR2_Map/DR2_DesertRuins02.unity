@@ -9201,7 +9201,7 @@ MonoBehaviour:
   rotationDamping: 4
   cockpit: 0
   mouseSensitivity: 0.1
-  recenterDelay: 2.5
+  recenterDelay: 10
   recenterTime: 1.2
   recenterMaxSpeed: 90
   recenterMinSpeed: 2

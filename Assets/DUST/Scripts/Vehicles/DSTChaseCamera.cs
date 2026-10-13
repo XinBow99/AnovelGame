@@ -21,7 +21,7 @@ namespace DUST.Vehicles
 
         [Header("Free look")]
         public float mouseSensitivity = 0.1f;   // 度 / 像素（跟走路一樣）
-        public float recenterDelay = 2.5f;      // 滑鼠停多久開始轉回去
+        public float recenterDelay = 10f;       // 滑鼠停多久開始轉回去
         public float recenterTime = 1.2f;       // 轉回去大約花多久（緩起緩停）
         public float recenterMaxSpeed = 90f;    // 度 / 秒；太快會暈
         public float recenterMinSpeed = 2f;     // 車子比這慢（停著）就不轉回去，讓人慢慢看
