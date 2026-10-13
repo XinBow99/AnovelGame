@@ -28,7 +28,8 @@ namespace DUST.Animals
         bool _built;
         float _nextLook;
         Vector3 _lastPos;
-        float _speed, _deadT, _speedNorm;
+        float _speed, _deadT, _speedNorm, _walked;
+        bool _leftFoot;
         static readonly int SpeedId = Animator.StringToHash("Speed");
         static readonly int GrazeId = Animator.StringToHash("Graze");
         static readonly int AlertId = Animator.StringToHash("Alert");
@@ -206,6 +207,18 @@ namespace DUST.Animals
             _lastPos = transform.position;
             float inst = d.magnitude / dt;
             if (inst > 20f) inst = 0f;
+            // 足跡：每走一步留一個（左右交替）
+            if (inst > 0f && Pose != CreaturePose.Dead)
+            {
+                _walked += d.magnitude;
+                float stride = DSTTracks.StrideOf(Genome);
+                if (_walked > stride)
+                {
+                    _walked -= stride;
+                    _leftFoot = !_leftFoot;
+                    DSTTracks.Step(transform.position, d.normalized, Genome, _leftFoot);
+                }
+            }
             _speed = Mathf.Lerp(_speed, inst, 1f - Mathf.Exp(-8f * dt));
             var anim = _rig.animator;
             if (Pose == CreaturePose.Dead)

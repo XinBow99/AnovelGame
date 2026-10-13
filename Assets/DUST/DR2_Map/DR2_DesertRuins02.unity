@@ -31979,6 +31979,7 @@ GameObject:
   m_Component:
   - component: {fileID: 520760433}
   - component: {fileID: 520760432}
+  - component: {fileID: 520760434}
   m_Layer: 0
   m_Name: ProcAnimalSpawner
   m_TagString: Untagged
@@ -32006,6 +32007,7 @@ MonoBehaviour:
   maxSpawnDistance: 45
   despawnDistance: 75
   sleepDistance: 25
+  bandSpawnDistance: 55
 --- !u!4 &520760433
 Transform:
   m_ObjectHideFlags: 0
@@ -32021,6 +32023,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &520760434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 520760431}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec8e2add8892b104ebd65904ca9a3eab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Animals.DSTTracks
+  material: {fileID: 2100000, guid: b5cf47ce3cf4b2e4bb6abc9a991856ea, type: 2}
+  maxPrints: 400
+  viewRange: 26
+  lifeHours: 5
+  refresh: 0.3
 --- !u!1001 &521434976
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -21,6 +21,10 @@ namespace DUST.Animals
 
         public State CurrentState { get; private set; }
         public float Health { get; private set; }
+
+        // 遷徙：有綁的話，閒逛的中心改成「群現在該在的位置」（DSTMigration 算的），落後太多就小跑追上
+        public System.Func<Vector3> leash;
+        public float leashRadius = 5f;
         public bool IsAlive => CurrentState != State.Dead && !_dead.Value;
         public event System.Action<DSTAnimal> Removed;
 
@@ -142,10 +146,10 @@ namespace DUST.Animals
             switch (CurrentState)
             {
                 case State.Idle:
-                    if (Time.time > _stateUntil) Enter(Random.value < species.sniffChance ? State.Sniff : State.Wander);
+                    if (Time.time > _stateUntil || Strayed()) Enter(Random.value < species.sniffChance && !Strayed() ? State.Sniff : State.Wander);
                     break;
                 case State.Sniff:
-                    if (Time.time > _stateUntil) Enter(State.Idle);
+                    if (Time.time > _stateUntil || Strayed()) Enter(State.Idle);
                     break;
                 case State.Wander:
                     if (Arrived() || Time.time > _stateUntil) Enter(State.Idle);
@@ -185,7 +189,14 @@ namespace DUST.Animals
                     // 群居的往同伴中心靠，閒逛範圍也小一點
                     var center = transform.position;
                     float radius = species.wanderRadius;
-                    if (species.herdCohesion > 0f && HerdCenter(out var hc))
+                    if (leash != null)
+                    {
+                        center = leash();
+                        radius = leashRadius;
+                        float behind = Vector3.Distance(transform.position, center);
+                        if (behind > leashRadius * 3f) _agent.speed = Mathf.Min(species.runSpeed * 0.6f, species.walkSpeed * 2.2f);
+                    }
+                    else if (species.herdCohesion > 0f && HerdCenter(out var hc))
                     {
                         center = Vector3.Lerp(center, hc, species.herdCohesion);
                         radius *= 1f - species.herdCohesion * 0.6f;
@@ -314,6 +325,8 @@ namespace DUST.Animals
         {
             if (_agent.isOnNavMesh) { _agent.isStopped = true; _agent.ResetPath(); }
         }
+
+        bool Strayed() => leash != null && (leash() - transform.position).sqrMagnitude > leashRadius * leashRadius * 2.25f;
 
         bool Arrived() => !_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance + 0.2f;
 

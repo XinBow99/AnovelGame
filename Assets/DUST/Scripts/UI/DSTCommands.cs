@@ -20,7 +20,7 @@ namespace DUST.UI
             "/tp <x> <z> | /tp <x> <y> <z> | /tp <玩家編號>　傳送",
             "/time <0-24 | 6:30 | day | noon | night | midnight>　調整時間",
             "/pos　目前座標　　/seed　世界種子　　/clear　清除聊天",
-            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群",
+            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群　　/herds　附近動物群在哪、幾點出門",
             "/cheats on|off　（房主）開放作弊指令給其他玩家",
         };
 
@@ -120,8 +120,32 @@ namespace DUST.UI
                     if (args.Length < 2 || !TryHour(args[1], out float hour)) { DSTChat.System("用法：/time 6、/time 18:30、/time night"); return; }
                     me.RequestSetHour(hour);
                     return;
+
+                case "herds":
+                    if (!DUST.Animals.DSTMigration.Available) { DSTChat.System("只有隨機世界有遷徙"); return; }
+                    var herds = new System.Collections.Generic.List<DUST.Animals.DSTBand>();
+                    var here = me.transform.position;
+                    DUST.Animals.DSTProcSpawner.Herds(here, 300f, herds);
+                    double now = DUST.Animals.DSTMigration.Now;
+                    DSTChat.System($"附近的動物群（{herds.Count}）：");
+                    for (int i = 0; i < Mathf.Min(6, herds.Count); i++)
+                    {
+                        var b = herds[i];
+                        var at = b.MemberAt(now, 0, out bool moving) - here;
+                        string dirName = Compass(Mathf.Atan2(at.x, at.z) * Mathf.Rad2Deg);
+                        float next = b.NextDeparture(now);
+                        DSTChat.System($"{b.genome.name} ×{b.count}　{dirName} {new Vector2(at.x, at.z).magnitude:0} m　" +
+                                       (moving ? "遷徙中" : $"在窩裡，{Mathf.FloorToInt(next):00}:{Mathf.FloorToInt(next % 1f * 60f):00} 出門") + $"　路線 {b.length:0} m");
+                    }
+                    return;
             }
             DSTChat.System($"沒有這個指令：/{cmd}（/help 看全部）");
+        }
+
+        static string Compass(float deg)
+        {
+            string[] n = { "北", "東北", "東", "東南", "南", "西南", "西", "西北" };
+            return n[Mathf.RoundToInt(Mathf.Repeat(deg, 360f) / 45f) % 8];
         }
 
         static bool Toggle(string[] args, bool current)

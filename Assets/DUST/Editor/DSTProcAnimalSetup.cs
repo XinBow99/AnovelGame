@@ -68,6 +68,10 @@ namespace DUST.EditorTools
             }
             sp.prefab = prefab;
             EditorUtility.SetDirty(sp);
+            var tracks = sp.GetComponent<DSTTracks>();
+            if (!tracks) tracks = sp.gameObject.AddComponent<DSTTracks>();
+            tracks.material = BuildFootprints();
+            EditorUtility.SetDirty(tracks);
 
             var nm = Object.FindAnyObjectByType<NetworkManager>();
             if (nm) DSTNetSetup.RegisterPrefabs(nm, new[] { prefab });
@@ -205,6 +209,159 @@ namespace DUST.EditorTools
             }
             mat.shader = shader;
             mat.SetFloat("_Detail", 1f);
+            HDMaterial.ValidateMaterial(mat);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        // ------------------------------------------------------------------ 足跡（DSTTracks）：4 格圖集（肉墊 / 偶蹄 / 圓石掌 / 爪），顏色 + 法線，HDRP Decal 材質
+        const string PrintColorPath = KitDir + "/T_DST_Footprints.png";
+        const string PrintNormalPath = KitDir + "/T_DST_Footprints_N.png";
+        const string PrintMaterialPath = Dir + "/M_DST_Footprint.mat";
+
+        [MenuItem("DUST/Animals/Setup Footprints")]
+        public static void SetupFootprints()
+        {
+            var mat = BuildFootprints();
+            var sp = Object.FindAnyObjectByType<DSTProcSpawner>();
+            if (!sp) { Debug.LogWarning("場景裡沒有 DSTProcSpawner（先跑 Setup Procedural Species）"); return; }
+            var tr = sp.GetComponent<DSTTracks>();
+            if (!tr) tr = sp.gameObject.AddComponent<DSTTracks>();
+            tr.material = mat;
+            EditorUtility.SetDirty(tr);
+            EditorSceneManager.MarkSceneDirty(sp.gameObject.scene);
+            EditorSceneManager.SaveScene(sp.gameObject.scene);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[DUST] Footprints ready: " + PrintMaterialPath);
+        }
+
+        // 腳印深度（0 = 平、1 = 最深），u 左右、v 前後（+v 朝前進方向），範圍 -1..1
+        static float PrintDepth(int cell, float u, float v)
+        {
+            float E(float cx, float cy, float rx, float ry) { float dx = (u - cx) / rx, dy = (v - cy) / ry; return dx * dx + dy * dy; }
+            // GLSL 的 smoothstep（Mathf.SmoothStep 是在兩個值之間內插，不是這個）
+            float In(float e) { float t = Mathf.Clamp01((e - 0.6f) / 0.4f); return 1f - t * t * (3f - 2f * t); }
+            float d = 0f;
+            switch (cell)
+            {
+                case 0: // 犬科肉墊：掌墊 + 四個趾
+                    d = In(E(0f, -0.3f, 0.42f, 0.32f));
+                    d = Mathf.Max(d, In(E(-0.44f, 0.22f, 0.15f, 0.19f)), In(E(-0.15f, 0.52f, 0.15f, 0.2f)));
+                    d = Mathf.Max(d, In(E(0.15f, 0.52f, 0.15f, 0.2f)), In(E(0.44f, 0.22f, 0.15f, 0.19f)));
+                    d = Mathf.Max(d, 0.7f * In(E(-0.17f, 0.82f, 0.05f, 0.08f)), 0.7f * In(E(0.17f, 0.82f, 0.05f, 0.08f)));
+                    break;
+                case 1: // 偶蹄：兩瓣，前端收尖
+                    for (int s = -1; s <= 1; s += 2)
+                    {
+                        float w = 0.22f * (1f - 0.55f * Mathf.Clamp01(v));
+                        d = Mathf.Max(d, In(E(s * 0.24f, 0f, Mathf.Max(0.05f, w), 0.72f)));
+                    }
+                    break;
+                case 2: // 圓石掌：大圓墊 + 三個鈍趾
+                    d = In(E(0f, -0.12f, 0.6f, 0.55f));
+                    d = Mathf.Max(d, In(E(-0.42f, 0.55f, 0.2f, 0.2f)), In(E(0f, 0.7f, 0.22f, 0.22f)), In(E(0.42f, 0.55f, 0.2f, 0.2f)));
+                    break;
+                default: // 穴居的爪：窄掌墊 + 五道爪痕
+                    d = In(E(0f, -0.3f, 0.45f, 0.3f));
+                    for (int c = 0; c < 5; c++)
+                    {
+                        float cx = -0.5f + c * 0.25f;
+                        float ry = 0.24f, cy = 0.42f - Mathf.Abs(cx) * 0.3f;
+                        float du = u - cx - (v - cy) * cx * 0.5f;          // 往外斜
+                        float e = (du / 0.055f) * (du / 0.055f) + ((v - cy) / ry) * ((v - cy) / ry);
+                        d = Mathf.Max(d, In(e));
+                    }
+                    break;
+            }
+            return d;
+        }
+
+        static Material BuildFootprints()
+        {
+            const int C = 128, W = C * 4;
+            var h = new float[W * C];
+            for (int cell = 0; cell < 4; cell++)
+            for (int y = 0; y < C; y++)
+            for (int x = 0; x < C; x++)
+            {
+                float u = (x + 0.5f) / C * 2f - 1f, v = (y + 0.5f) / C * 2f - 1f;
+                // 腳印只用中間 85%，邊緣留空（投影框外不會被切到）
+                h[y * W + cell * C + x] = PrintDepth(cell, u / 0.85f, v / 0.85f);
+            }
+            // 被擠出來的沙：腳印外圍一圈微微隆起（深度圖模糊後減掉原本的）
+            var blur = new float[W * C];
+            const int R = 5;
+            for (int y = 0; y < C; y++)
+            for (int x = 0; x < W; x++)
+            {
+                float s = 0f; int n = 0;
+                int cell = x / C;
+                for (int j = -R; j <= R; j++)
+                for (int i = -R; i <= R; i++)
+                {
+                    int xx = x + i, yy = y + j;
+                    if (yy < 0 || yy >= C || xx < cell * C || xx >= (cell + 1) * C) continue;
+                    s += h[yy * W + xx]; n++;
+                }
+                blur[y * W + x] = s / n;
+            }
+            var col = new Color[W * C];
+            var nrm = new Color[W * C];
+            var height = new float[W * C];
+            for (int i = 0; i < W * C; i++)
+            {
+                float rim = Mathf.Clamp01((blur[i] - h[i]) * 2.2f);
+                height[i] = -h[i] + rim * 0.35f;
+                // 坑底陰影要夠深才看得出來（Decal 是蓋上去的顏色，不是相乘）
+                float a = Mathf.Clamp01(h[i] * 0.62f + rim * 0.3f);
+                var c = Color.Lerp(new Color(0.62f, 0.51f, 0.38f), new Color(0.3f, 0.23f, 0.16f), Mathf.Sqrt(h[i]));
+                col[i] = new Color(c.r, c.g, c.b, a);
+            }
+            for (int y = 0; y < C; y++)
+            for (int x = 0; x < W; x++)
+            {
+                int cell = x / C;
+                float Hh(int xx, int yy) => height[Mathf.Clamp(yy, 0, C - 1) * W + Mathf.Clamp(xx, cell * C, cell * C + C - 1)];
+                float dx = Hh(x + 1, y) - Hh(x - 1, y), dy = Hh(x, y + 1) - Hh(x, y - 1);
+                var n = new Vector3(-dx * 10f, -dy * 10f, 1f).normalized;
+                nrm[y * W + x] = new Color(n.x * 0.5f + 0.5f, n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f);
+            }
+            Texture2D Save(string path, Color[] px, bool normal)
+            {
+                var t = new Texture2D(W, C, TextureFormat.RGBA32, false);
+                t.SetPixels(px); t.Apply();
+                File.WriteAllBytes(path, t.EncodeToPNG());
+                Object.DestroyImmediate(t);
+                AssetDatabase.ImportAsset(path);
+                var ti = (TextureImporter)AssetImporter.GetAtPath(path);
+                ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                ti.sRGBTexture = !normal;
+                ti.alphaIsTransparency = !normal;
+                ti.wrapMode = TextureWrapMode.Clamp;
+                ti.mipmapEnabled = true;
+                ti.SaveAndReimport();
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            }
+            var colTex = Save(PrintColorPath, col, false);
+            var nrmTex = Save(PrintNormalPath, nrm, true);
+
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(PrintMaterialPath);
+            if (!mat)
+            {
+                mat = new Material(Shader.Find("HDRP/Decal"));
+                AssetDatabase.CreateAsset(mat, PrintMaterialPath);
+            }
+            mat.SetTexture("_BaseColorMap", colTex);
+            mat.SetTexture("_NormalMap", nrmTex);
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_DecalBlend", 1f);
+            mat.SetFloat("_NormalBlendSrc", 0f);       // 法線的不透明度跟著顏色貼圖的 alpha
+            mat.SetFloat("_AffectAlbedo", 1f);
+            mat.SetFloat("_AffectNormal", 1f);
+            mat.SetFloat("_AffectMetal", 0f);
+            mat.SetFloat("_AffectSmoothness", 0f);
+            mat.SetFloat("_AffectAO", 0f);
+            mat.enableInstancing = true;
             HDMaterial.ValidateMaterial(mat);
             EditorUtility.SetDirty(mat);
             return mat;

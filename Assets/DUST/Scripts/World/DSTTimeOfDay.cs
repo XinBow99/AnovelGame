@@ -37,13 +37,17 @@ namespace DUST.World
         public static DSTTimeOfDay Instance { get; private set; }
 
         public float Hour { get; private set; }
+        /// <summary>從開房起一直累加的時數（不會繞回 0）：發條世界（動物遷徙路線）用它算「第幾天的幾點」</summary>
+        public double TotalHours { get; private set; }
         public float SunElevation { get; private set; }
         public bool IsNight => SunElevation < -4f;
+        public float SecondsPerHour => dayLengthMinutes * 60f / 24f;
 
-        readonly NetworkVariable<float> _anchorHour = new NetworkVariable<float>();
+        // 錨點存的是累加時數（不是 0~24 的鐘點），大家才算得出同一個「第幾天」
+        readonly NetworkVariable<double> _anchorHour = new NetworkVariable<double>();
         readonly NetworkVariable<double> _anchorServerTime = new NetworkVariable<double>();
 
-        float _localAnchorHour;
+        double _localAnchorHour;
         float _localAnchorTime;
         Exposure _exposure;
         HDRISky _sky;
@@ -76,42 +80,51 @@ namespace DUST.World
 
         public override void OnNetworkSpawn()
         {
-            if (IsServer) SetHour(LocalHour());   // 開房時接著選單畫面的時間走
+            if (IsServer) SetTotal(LocalTotal());   // 開房時接著選單畫面的時間走
         }
 
         public override void OnNetworkDespawn()
         {
             // 離開房間回到選單：從現在的時間繼續在本機走
-            _localAnchorHour = Hour;
+            _localAnchorHour = TotalHours;
             _localAnchorTime = Time.time;
         }
 
-        // 主機跳到指定時間（測試、之後的睡覺功能）
+        // 主機跳到指定時間（測試、之後的睡覺功能）：時間只往前走，比現在早的鐘點 = 隔天
         public void SetHour(float hour)
         {
             hour = Mathf.Repeat(hour, 24f);
+            double now = CurrentTotal();
+            double t = System.Math.Floor(now / 24.0) * 24.0 + hour;
+            if (t < now - 0.01) t += 24.0;
+            SetTotal(t);
+        }
+
+        void SetTotal(double total)
+        {
             if (IsSpawned)
             {
                 if (!IsServer) return;
-                _anchorHour.Value = hour;
+                _anchorHour.Value = total;
                 _anchorServerTime.Value = NetworkManager.ServerTime.Time;
             }
-            _localAnchorHour = hour;
+            _localAnchorHour = total;
             _localAnchorTime = Time.time;
         }
 
-        float LocalHour() => Mathf.Repeat(_localAnchorHour + (Time.time - _localAnchorTime) * HoursPerSecond, 24f);
+        double LocalTotal() => _localAnchorHour + (Time.time - _localAnchorTime) * HoursPerSecond;
 
-        float CurrentHour()
+        double CurrentTotal()
         {
-            if (!IsSpawned) return LocalHour();
+            if (!IsSpawned) return LocalTotal();
             double elapsed = NetworkManager.ServerTime.Time - _anchorServerTime.Value;
-            return Mathf.Repeat(_anchorHour.Value + (float)(elapsed * HoursPerSecond), 24f);
+            return _anchorHour.Value + elapsed * HoursPerSecond;
         }
 
         void Update()
         {
-            Hour = CurrentHour();
+            TotalHours = CurrentTotal();
+            Hour = (float)(TotalHours - System.Math.Floor(TotalHours / 24.0) * 24.0);
             ApplyLighting();
         }
 
