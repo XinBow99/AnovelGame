@@ -80,7 +80,8 @@ namespace DUST.World
 
         public override void OnNetworkSpawn()
         {
-            if (IsServer) SetTotal(LocalTotal());   // 開房時接著選單畫面的時間走
+            // 開房：有存檔就接著存檔的時間走，新世界接著選單畫面的時間
+            if (IsServer) SetTotal(DSTSave.SavedHours ?? LocalTotal());
         }
 
         public override void OnNetworkDespawn()

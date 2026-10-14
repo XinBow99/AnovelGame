@@ -106,6 +106,12 @@ namespace DUST.World
 
         public override void OnNetworkDespawn()
         {
+            // 房主關房：存檔（地形卸載前，動物的群還算得出來）
+            if (DSTSave.Active)
+            {
+                DSTSave.SaveAll();
+                DSTSave.Close();
+            }
             Deactivate();
             RestoreScenePoses();
             _ready = false;

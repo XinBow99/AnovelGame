@@ -11,6 +11,9 @@ namespace DUST.Animals
     // 尺寸：size = 相對零件庫原始大小（鬃狼骨架，半尺寸世界肩高約 0.37 m）的倍率。
     public enum Terrain { Any, Open, Rocky }
     public enum Pattern { Plain, Stripes, Spots, Saddle }
+    public enum Diet { Herbivore, Carnivore }
+    // 身體藍圖：四足（鬃狼骨架零件庫）或三輻射三足（沙陶翻盤獸，docs/tripod_A_spec.md）
+    public enum BodyPlan { Quadruped, Triradial }
 
     [Serializable]
     public sealed class DSTGenome
@@ -43,12 +46,50 @@ namespace DUST.Animals
         public float grazeChance;     // 停下來低頭吃東西 / 嗅聞的機率
         public int maxAlive;
         public float walkSpeed, runSpeed, notice;
+        public Diet diet;
+        public BodyPlan bodyPlan;
+        public bool Triradial => bodyPlan == BodyPlan.Triradial;
+
+        // 體重（公斤）：零件庫原始大小當作鬃狼（約 23 kg），體重跟長度的三次方走【建議】
+        public float Mass => 23f * size * size * size;
+        public bool Carnivore => diet == Diet.Carnivore;
 
         static readonly Dictionary<int, DSTGenome> _cache = new Dictionary<int, DSTGenome>();
 
         public static DSTGenome Get(int key)
         {
             if (!_cache.TryGetValue(key, out var g)) _cache[key] = g = Generate(key);
+            return g;
+        }
+
+        // ------------------------------------------------------------------ 演化出來的新物種（第 5 階段）
+        // 新物種 = 發條物種（root）的基因 × 累積的特徵倍率（大小、跑速、警覺距離）；名字用新 key 重新取。
+        // 只要知道 (key, root, 倍率) 每台電腦都算得出一樣的結果，所以連線只要傳這三個。
+        public int root;                       // 外型來自哪個發條物種（自己就是發條物種 = key）
+        public Vector3 lineage = Vector3.one;  // 相對 root 的累積倍率：x 大小、y 跑速、z 警覺距離
+        public bool IsDerived => root != 0 && root != key;
+
+        public static DSTGenome Derive(int key, int rootKey, Vector3 mul)
+        {
+            if (_cache.TryGetValue(key, out var cached) && cached.IsDerived) return cached;
+            var src = Get(rootKey);
+            var g = (DSTGenome)src.MemberwiseClone();
+            g.key = key;
+            g.root = rootKey;
+            g.lineage = mul;
+            g.size = src.size * mul.x;
+            g.hipHeight = src.hipHeight * mul.x;
+            g.bodyLength = src.bodyLength * mul.x;
+            g.bodyRadius = src.bodyRadius * mul.x;
+            g.neckLength = src.neckLength * mul.x;
+            g.headRadius = src.headRadius * mul.x;
+            g.walkSpeed = src.walkSpeed * mul.y;
+            g.runSpeed = src.runSpeed * mul.y;
+            g.notice = src.notice * mul.z;
+            // 新名字：外型零件一樣，顏色字、特徵字重抽；跟祖先撞名就加「新」
+            MakeNames(g, new System.Random(key));
+            if (g.name == src.name) g.name = "新" + g.name;
+            _cache[key] = g;
             return g;
         }
 
@@ -160,7 +201,66 @@ namespace DUST.Animals
             g.notice = Mathf.Lerp(7f, 12f, (float)r.NextDouble());
 
             MakeNames(g, r);
+            g.diet = DietOf(key, g);
+            if (DSTNoise.Hash01(key, 0, 0, 6200) < TriradialChance(kind)) MakeTriradial(g, key);
             return g;
+        }
+
+        // ------------------------------------------------------------------ 三輻射三足（沙陶翻盤獸）
+        // 用另一個雜湊決定（不動上面的亂數序列，其他物種完全不變）。台地、沙海多外星型的生物，比例高一點【建議：整體約 1 成】
+        static float TriradialChance(DSTWorldGen.RegionKind k) => k switch
+        {
+            DSTWorldGen.RegionKind.Mesa => 0.22f,
+            DSTWorldGen.RegionKind.DuneSea => 0.18f,
+            DSTWorldGen.RegionKind.Settlement or DSTWorldGen.RegionKind.Camp or DSTWorldGen.RegionKind.Ruins => 0f,
+            _ => 0.07f,
+        };
+
+        // 三足模型在 size 1 時寬約 1.2 m、身體中心離地 0.46 m；縮成 0.7 倍，跟同 size 的四足差不多佔地
+        public const float TriradialModelScale = 0.7f;
+
+        static void MakeTriradial(DSTGenome g, int key)
+        {
+            g.bodyPlan = BodyPlan.Triradial;
+            g.body = "Triradial";
+            g.head = ""; g.ears = ""; g.tail = ""; g.horns = "";
+            g.eyes = true;
+            float s = g.size * TriradialModelScale;
+            g.hipHeight = 0.46f * s;          // 身體中心高
+            g.bodyLength = 0.5f * s;          // 圓盤直徑
+            g.bodyRadius = 0.22f * s;
+            g.neckLength = 0f;
+            g.headRadius = 0.06f * s;
+            // 三腳的步伐：跑速上限是四足的 0.8 倍（三腳狗著地時間變長，Jarvis 2013；倍數是建議）
+            g.walkSpeed *= 0.8f;
+            g.runSpeed = Mathf.Max(1.8f, g.runSpeed * 0.8f);
+            // 三點站著不花力氣（Thomson 2019）：適合站著等，成群的少
+            g.group = new Vector2Int(1, g.group.y > 2 ? 2 : 1);
+            g.cohesion = Mathf.Min(g.cohesion, 0.3f);
+            g.terrain = Terrain.Any;
+            // 埋伏型：一部分吃肉【建議 0.35】
+            g.diet = DSTNoise.Hash01(key, 0, 0, 6201) < 0.35f ? Diet.Carnivore : Diet.Herbivore;
+            MakeNames(g, new System.Random(key ^ 0x7417));
+        }
+
+        // 食性用另外一個雜湊決定（不動上面的亂數序列，現有物種的外型、習性都不會變）
+        // 犬型、棘型的身體比較常是肉食；有蹄、駝、岩背都吃草【建議】
+        static Diet DietOf(int key, DSTGenome g)
+        {
+            if (g.head == "Ungulate") return Diet.Herbivore;
+            float p = g.body switch { "Canid" => 0.55f, "Spined" => 0.45f, "Burrower" => 0.2f, _ => 0f };
+            return DSTNoise.Hash01(key, 0, 0, 6100) < p ? Diet.Carnivore : Diet.Herbivore;
+        }
+
+        /// <summary>
+        /// 這個肉食物種會不會獵這種動物。依 Carbone et al. 1999（Nature）：約 21.5 kg 以下的肉食動物吃比自己輕一半以下的獵物，
+        /// 以上的改吃大型獵物；Tucker et al. 2016：大型肉食動物的獵物 ≥ 自己體重的 45%。上限（成群 3 倍、獨居 1.5 倍）是【建議】。
+        /// </summary>
+        public static bool CanEat(DSTGenome predator, float predatorMass, int preyKey, float preyMass)
+        {
+            if (predator == null || !predator.Carnivore || preyKey == predator.key) return false;
+            if (predatorMass < 21.5f) return preyMass <= predatorMass * 0.5f;
+            return preyMass >= predatorMass * 0.45f && preyMass <= predatorMass * (predator.group.y > 2 ? 3f : 1.5f);
         }
 
         // 沙漠動物多是保護色：沙、赭、灰褐；偶爾有比較顯眼的斑紋
@@ -191,6 +291,7 @@ namespace DUST.Animals
         {
             { "Canid", new[] { "狐", "豺", "犬" } }, { "Ungulate", new[] { "羚", "鹿", "麂" } }, { "Burrower", new[] { "獾", "甲獸", "穴獸" } },
             { "Humped", new[] { "駝", "駝羚" } }, { "Stoneback", new[] { "岩獸", "石背獸" } }, { "Spined", new[] { "棘犬", "刺獸" } },
+            { "Triradial", new[] { "翻盤獸", "盤足獸" } },
         };
         static readonly string[] LatinA = { "Psam", "Xer", "Ere", "Dor", "Ammo", "Pyr", "Cal", "Thal", "Kor", "Sab", "Lith" };
         static readonly string[] LatinB = { "ocyon", "ictis", "odon", "ophus", "otherium", "amys", "elaphus", "ogale" };

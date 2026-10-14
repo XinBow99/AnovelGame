@@ -14,9 +14,19 @@ namespace DUST.Animals
         public RuntimeAnimatorController controller;    // AC_CreatureKit（Speed / Graze / Alert）
         public Material template;                       // HDRP/Lit 範本材質（舊的毛色貼圖模式）
         public Material skin;                           // M_DST_AlienSkin（程序外皮 shader）；有指定就用它，沒有才退回毛色貼圖
+        public GameObject tripodModel;                  // SK_DST_Tripod（沙陶翻盤獸，三輻射三足）
+        public Material tripodMaterial;                 // M_DST_Tripod（Blender 烘好的骨甲貼圖：顏色、法線、遮罩）
+        DSTTripodGait _tripod;
 
         readonly NetworkVariable<int> _key = new NetworkVariable<int>();
         readonly NetworkVariable<byte> _pose = new NetworkVariable<byte>();
+        // 演化：新物種的來源（root + 累積倍率），和這一隻的體型倍率（族群平均 × 個體差異）
+        readonly NetworkVariable<int> _root = new NetworkVariable<int>();
+        readonly NetworkVariable<Vector3> _lineage = new NetworkVariable<Vector3>(Vector3.one);
+        readonly NetworkVariable<float> _scale = new NetworkVariable<float>(0f);
+        int _pendingRoot;
+        Vector3 _pendingLineage = Vector3.one;
+        float _pendingScale;
 
         public DSTGenome Genome { get; private set; }
         public int Key => _key.Value;
@@ -45,32 +55,56 @@ namespace DUST.Animals
         void Awake() => _animal = GetComponent<DSTAnimal>();
 
         /// <summary>主機：Spawn 之前指定物種</summary>
-        public void SetKey(int key)
+        /// <summary>主機：Spawn 之前指定物種；scale = 這一隻的體型倍率（0 = 舊的固定小差異）</summary>
+        public void SetKey(int key, float scale = 0f)
         {
             _pendingKey = key;
+            var g = DSTGenome.Get(key);
+            _pendingRoot = g.IsDerived ? g.root : 0;
+            _pendingLineage = g.lineage;
+            _pendingScale = scale;
             // 不連線（測試）時直接組
-            if (!NetworkManager.Singleton || !NetworkManager.Singleton.IsListening) Build(key);
+            if (!NetworkManager.Singleton || !NetworkManager.Singleton.IsListening) Build(key, _pendingRoot, _pendingLineage, scale);
         }
 
         public override void OnNetworkSpawn()
         {
-            if (IsServer) _key.Value = _pendingKey;
-            Build(_key.Value);
+            if (IsServer)
+            {
+                _key.Value = _pendingKey;
+                _root.Value = _pendingRoot;
+                _lineage.Value = _pendingLineage;
+                _scale.Value = _pendingScale;
+            }
+            Build(_key.Value, _root.Value, _lineage.Value, _scale.Value);
         }
 
-        void Build(int key)
+        /// <summary>這一隻的體型倍率（相對物種）</summary>
+        public float Scale { get; private set; } = 1f;
+
+        void Build(int key, int root, Vector3 lineage, float scale)
         {
             if (_built) return;
             _built = true;
-            Genome = DSTGenome.Get(key);
+            // 演化出來的新物種：客戶端沒有主機的族群資料，用 root + 倍率自己算出同一個基因
+            Genome = root != 0 && root != key ? DSTGenome.Derive(key, root, lineage) : DSTGenome.Get(key);
             var snap = GetComponent<DSTGroundSnap>();
             if (!snap) snap = gameObject.AddComponent<DSTGroundSnap>();
-            _rig = DSTCreatureAssembler.Build(Genome, snap.EnsurePivot(), kit, controller, template, skin);
-            // 同一物種的個體大小有一點差異（由連線 ID 決定，每台電腦一樣）
-            float s = 1f + ((IsSpawned ? (int)(NetworkObjectId % 17) : 8) - 8) * 0.012f;
+            // 三輻射三足：另一個模型，骨頭全部由程式步態擺（DSTTripodGait）
+            bool tri = Genome.Triradial && tripodModel;
+            _rig = tri ? DSTTripodGait.Build(Genome, snap.EnsurePivot(), tripodModel, tripodMaterial, template)
+                       : DSTCreatureAssembler.Build(Genome, snap.EnsurePivot(), kit, controller, template, skin);
+            // 個體大小：主機給的（族群平均 × 個體差異）；沒給就用連線 ID 的小差異（每台電腦一樣）
+            float s = scale > 0f ? scale : 1f + ((IsSpawned ? (int)(NetworkObjectId % 17) : 8) - 8) * 0.012f;
+            Scale = s;
             _rig.root.localScale *= s;
             _rig.root.localPosition *= s;
             _rig.restPosition = _rig.root.localPosition;
+            if (tri)
+            {
+                _tripod = _rig.root.GetComponent<DSTTripodGait>();
+                _tripod.Init(transform);
+            }
             _speedNorm = Mathf.Max(0.2f, Genome.size * Genome.legLen * s);
             _lastPos = transform.position;
 
@@ -177,9 +211,9 @@ namespace DUST.Animals
             {
                 var p = _animal.IsAlive ? _animal.CurrentState switch
                 {
-                    DSTAnimal.State.Sniff => CreaturePose.Graze,
+                    DSTAnimal.State.Sniff or DSTAnimal.State.Eat => CreaturePose.Graze,
                     DSTAnimal.State.Alert => CreaturePose.Alert,
-                    DSTAnimal.State.Flee => CreaturePose.Flee,
+                    DSTAnimal.State.Flee or DSTAnimal.State.Chase => CreaturePose.Flee,
                     _ => CreaturePose.Normal,
                 } : CreaturePose.Dead;
                 if (IsSpawned && _pose.Value != (byte)p) _pose.Value = (byte)p;
@@ -220,6 +254,7 @@ namespace DUST.Animals
                 }
             }
             _speed = Mathf.Lerp(_speed, inst, 1f - Mathf.Exp(-8f * dt));
+            if (_tripod) { _tripod.Pose = Pose; return; }      // 三足：步態、警戒、死亡都在 DSTTripodGait
             var anim = _rig.animator;
             if (Pose == CreaturePose.Dead)
             {

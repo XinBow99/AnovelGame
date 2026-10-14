@@ -106,9 +106,31 @@ namespace DUST.Player
             UpdateFidget();
         }
 
+        // 倒下（死掉）：跟動物一樣，動畫停住、整隻側倒 85°（沒有死亡動畫）
+        bool _down;
+        float _downT;
+        Vector3 _restPos;
+        Quaternion _restRot;
+        bool _restSaved;
+
+        public void SetDown(bool down)
+        {
+            if (!_restSaved) { _restPos = model.localPosition; _restRot = model.localRotation; _restSaved = true; }
+            _down = down;
+            if (_graph.IsValid()) _graph.GetRootPlayable(0).SetSpeed(down ? 0.0 : 1.0);
+        }
+
         void LateUpdate()
         {
-            if (!_anchor) return;
+            if (!_anchor)
+            {
+                if (!_restSaved || (!_down && _downT <= 0f)) return;
+                _downT = Mathf.MoveTowards(_downT, _down ? 1f : 0f, Time.deltaTime / (_down ? 0.6f : 0.3f));
+                float e = Mathf.SmoothStep(0f, 1f, _downT);
+                model.localRotation = _restRot * Quaternion.Euler(0f, 0f, 85f * e);
+                model.localPosition = _restPos + Vector3.down * 0.18f * e;
+                return;
+            }
             // warp：一開始模型在玩家原本的位置，慢慢收斂到片段本身的位置
             _warpTime += Time.deltaTime;
             float w = _warpDur <= 0f ? 1f : Mathf.SmoothStep(0f, 1f, _warpTime / _warpDur);

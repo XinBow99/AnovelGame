@@ -49,14 +49,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 724911133
+  GlobalObjectIdHash: 3135149714
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
-  m_InScenePlaced: 1
+  m_InScenePlaced: 0
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 0
   SpawnWithObservers: 1
@@ -170,6 +170,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   species: {fileID: 0}
   corpseLifetime: 10
+  leashRadius: 5
 --- !u!114 &1159442262211683456
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -187,3 +188,5 @@ MonoBehaviour:
   controller: {fileID: 9100000, guid: 57cb2d7d3e192b34492fbc9e7a9c7f7c, type: 2}
   template: {fileID: 2100000, guid: f857fea55923bd04a9dcb8db47321ab3, type: 2}
   skin: {fileID: 2100000, guid: 52536abff2d38b54ca5705b260b62f7d, type: 2}
+  tripodModel: {fileID: 919132149155446097, guid: 30d67e8a20d5ec24d9d2e0e02f56f518, type: 3}
+  tripodMaterial: {fileID: 2100000, guid: ee4a5b233e784f649ad83b738cb41a6e, type: 2}

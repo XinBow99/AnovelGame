@@ -113,19 +113,27 @@ namespace DUST.Animals
         {
             var list = new List<DSTAnimal>();
             _bandAlive[b.id] = (b, list);
-            for (int m = 0; m < b.count; m++)
+            // 遠處族群少了，群就變小（被打光的群不會再出現，等族群長回來）
+            int visible = DSTPopulation.Visible(b);
+            // 演化：可能已經是新物種；每隻 = 族群平均 + 個體差異
+            int form = DSTPopulation.FormOf(b);
+            var mean = DSTPopulation.MeanOf(b);
+            for (int m = 0; m < visible; m++)
             {
                 var p = b.MemberAt(now, m, out bool moving);
                 if (!NavMesh.SamplePosition(p, out var hit, 4f, NavMesh.AllAreas)) continue;
                 var ahead = b.MemberAt(now + 0.05, m, out _) - p;
                 float yaw = moving && ahead.sqrMagnitude > 1e-4f ? Mathf.Atan2(ahead.x, ahead.z) * Mathf.Rad2Deg : Random.Range(0f, 360f);
-                var a = Spawn(b.key, hit.position, yaw);
+                var a = Spawn(form, hit.position, yaw, mean);
                 int member = m;
                 a.leash = () => b.MemberAt(DSTMigration.Now, member, out _);
+                a.Band = b;
                 a.leashRadius = 2.5f + b.genome.size * 2f;
                 list.Add(a);
                 a.Removed += dead => list.Remove(dead);
             }
+            // 一隻都沒放成（剛到的地方導航網格還沒建好）：下次再試，不然玩家沒離開前這群都不會出現
+            if (list.Count == 0 && visible > 0) _bandAlive.Remove(b.id);
         }
 
         /// <summary>給 /herds 指令：附近的群（距離由近到遠）</summary>
@@ -192,16 +200,21 @@ namespace DUST.Animals
             }
         }
 
-        public DSTAnimal Spawn(int key, Vector3 position, float yaw)
+        public DSTAnimal Spawn(int key, Vector3 position, float yaw) => Spawn(key, position, yaw, Vector3.zero);
+
+        public DSTAnimal Spawn(int key, Vector3 position, float yaw, Vector3 mean)
         {
             var go = Instantiate(prefab, position, Quaternion.Euler(0f, yaw, 0f));
-            go.GetComponent<DSTProcAnimal>().SetKey(key);
+            // 個體差異（第 5 階段）：體型要在 Spawn 之前定好（跟著生成一起同步），跑速、警覺距離只有主機用
+            var dev = DSTEvolution.RandomDev();
+            go.GetComponent<DSTProcAnimal>().SetKey(key, Mathf.Exp(mean.x + dev.x));
             var a = go.GetComponent<DSTAnimal>();
             if (!_alive.TryGetValue(key, out var list)) _alive[key] = list = new List<DSTAnimal>();
             list.Add(a);
             a.Removed += dead => list.Remove(dead);
             var no = go.GetComponent<NetworkObject>();
             if (no && NetworkManager.Singleton && NetworkManager.Singleton.IsServer) no.Spawn(true);
+            a.SetTraits(mean, dev);
             return a;
         }
 

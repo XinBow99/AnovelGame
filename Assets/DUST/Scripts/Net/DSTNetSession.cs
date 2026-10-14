@@ -28,6 +28,8 @@ namespace DUST.Net
         string _codeInput = "";
         string _seedInput = "";
         int _worldChoice;                   // 0 = 隨機世界、1 = 遺跡二（開房的人決定）
+        DSTSave.WorldFile _latest;          // 最近玩過的存檔（選單顯示）
+        bool _latestChecked;
         string _status = "";
         bool _busy;
         bool _usedRelay;
@@ -151,6 +153,10 @@ namespace DUST.Net
         {
             DSTWorld.RequestRandom = _worldChoice == 0;
             DSTWorld.RequestSeed = DSTWorldGen.ParseSeed(_seedInput);
+            // 隨機世界：同一個種子 = 同一個存檔（只有房主存）
+            if (DSTWorld.RequestRandom) DSTSave.Open(DSTWorld.RequestSeed);
+            else DSTSave.Close();
+            _latestChecked = false;          // 回到選單時重新找（關房時才會寫進存檔）
         }
 
         async void Leave()
@@ -225,7 +231,7 @@ namespace DUST.Net
 
         void MainMenu()
         {
-            var r = Centered(420, 540);
+            var r = Centered(420, 576);
             GUI.Box(r, GUIContent.none);
             GUILayout.BeginArea(new Rect(r.x + 24, r.y + 20, r.width - 48, r.height - 40));
             GUILayout.Label("DUST", _title, GUILayout.Height(48));
@@ -236,8 +242,13 @@ namespace DUST.Net
             {
                 GUILayout.Label("種子碼（空白 = 隨機）", _label);
                 _seedInput = GUILayout.TextField(_seedInput, 24, _field, GUILayout.Height(38));
+                // 最近玩過的世界：按一下把種子填進去（同一個種子 = 接著玩）
+                if (!_latestChecked) { _latestChecked = true; _latest = DSTSave.Latest(); }
+                if (_latest != null && GUILayout.Button($"上次的世界：{_latest.seed}（第 {(int)System.Math.Floor(System.Math.Max(0, _latest.totalHours) / 24.0) + 1} 天）", GUILayout.Height(30)))
+                    _seedInput = _latest.seed.ToString();
+                else if (_latest == null) GUILayout.Space(34);
             }
-            else GUILayout.Space(62);
+            else GUILayout.Space(96);
             GUILayout.Space(8);
             if (GUILayout.Button("開房（邀請朋友）", _button, GUILayout.Height(48))) Host();
             GUILayout.Space(16);

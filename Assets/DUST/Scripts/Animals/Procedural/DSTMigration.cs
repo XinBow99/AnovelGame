@@ -275,6 +275,9 @@ namespace DUST.Animals
             }
         }
 
+        /// <summary>窩在這個地區格裡的所有群（遠處族群的起始數量用）</summary>
+        public static IReadOnlyList<DSTBand> BandsIn(int rx, int rz) => Available ? Cell(rx, rz) : (IReadOnlyList<DSTBand>)System.Array.Empty<DSTBand>();
+
         const float MaxRadius = 240f;
         const float GatherCell = 600f;
 
@@ -307,6 +310,8 @@ namespace DUST.Animals
             return list;
         }
 
+        const float PredatorDenShare = 0.3f;
+
         static DSTBand Make(DSTWorldGen gen, int cx, int cz, int i)
         {
             int seed = gen.Seed;
@@ -317,6 +322,8 @@ namespace DUST.Animals
             var den = new Vector3(x, gen.Height(x, z), z);
 
             // 窩那個點的名冊裡，挑一種喜歡這裡地形的
+            // 肉食動物遠比獵物少（Carbone & Gittleman 2002：每 10,000 kg 獵物只養得起約 90 kg 的某種肉食動物），
+            // 所以挑到肉食的窩，大部分改挑下一種【比例 0.3 是建議】
             var roster = DSTEcology.At(den);
             if (roster.keys == null || roster.keys.Length == 0) return null;
             int start = (int)(DSTNoise.Hash(seed, cx * 131 + i, cz, 5102) % (uint)roster.keys.Length);
@@ -324,6 +331,7 @@ namespace DUST.Animals
             for (int j = 0; j < roster.keys.Length && g == null; j++)
             {
                 var c = DSTGenome.Get(roster.keys[(start + j) % roster.keys.Length]);
+                if (c.Carnivore && H(60 + j) > PredatorDenShare) continue;
                 if (DSTEcology.TerrainOk(c.terrain, den)) g = c;
             }
             if (g == null) return null;

@@ -20,7 +20,8 @@ namespace DUST.UI
             "/tp <x> <z> | /tp <x> <y> <z> | /tp <玩家編號>　傳送",
             "/time <0-24 | 6:30 | day | noon | night | midnight>　調整時間",
             "/pos　目前座標　　/seed　世界種子　　/clear　清除聊天",
-            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群　　/herds　附近動物群在哪、幾點出門　　/events　接下來幾天的沙暴、流星、集體遷徙　　/wait <小時>　時間往前跳",
+            "/pop　這個地區的族群數量與演化　　/evolve <編號> <size|speed|notice> <標準差>　（測試）推動演化/history [筆數]　世界的事件紀錄　　/save　立刻存檔（每 30 秒、關房時也會自動存）",
+            "/species　這個地區有哪些物種　　/summon <編號>　在前面生出一群　　/herds　附近動物群在哪、幾點出門　　/ssf　動物步伐選擇除錯畫面　　/hunger [0-1]　附近 60 m 動物的能量（不填 = 0.1，很餓）　　/events　接下來幾天的沙暴、流星、集體遷徙　　/wait <小時>　時間往前跳",
             "/cheats on|off　（房主）開放作弊指令給其他玩家",
         };
 
@@ -50,6 +51,74 @@ namespace DUST.UI
                 case "clear":
                     DSTChat.Clear();
                     return;
+
+                case "pop":
+                {
+                    if (!HostOnly("族群在房主那邊推進")) return;
+                    var c = DUST.Animals.DSTPopulation.RegionOf(me.transform.position);
+                    var r = DUST.Animals.DSTPopulation.Get(c.x, c.y);
+                    if (r == null) { DSTChat.System("這個地區還沒有族群紀錄（隨機世界、走進來幾秒後才會開始）"); return; }
+                    DSTChat.System($"{r.name} 的族群（推進到第 {r.day + 1} 天，一代 = {DUST.Animals.DSTPopulation.GenerationDays:0} 天）：");
+                    for (int i = 0; i < r.species.Count; i++)
+                    {
+                        var s = r.species[i];
+                        var g = DUST.Animals.DSTGenome.Get(s.Form);
+                        string diet = g.Carnivore ? "肉食" : "草食";
+                        if (s.extinct) { DSTChat.System($"{i + 1}. {s.name}（{diet}）　已絕跡（原本 {s.n0:0} 隻）"); continue; }
+                        int score = DUST.Animals.DSTEvolution.Score(s, out var d);
+                        string from = s.form != 0 ? $"（從{DUST.Animals.DSTGenome.Get(s.key).name}演化來的）" : "";
+                        DSTChat.System($"{i + 1}. {s.name}{from}（{diet}，{g.Mass * Mathf.Exp(3f * s.zSize):0} kg）　{s.n:0.#} 隻　原本 {s.n0:0} 隻（{s.n / Mathf.Max(1f, s.n0) * 100f:0}%）");
+                        DSTChat.System($"　　演化：體型 {Pct(s.zSize)}（d {d.x:0.0}）　跑速 {Pct(s.zSpeed)}（d {d.y:0.0}）　警覺距離 {Pct(s.zNotice)}（d {d.z:0.0}）　分化分數 {score}/{DUST.Animals.DSTEvolution.SpeciesScore}　這一代死了 {s.selDeaths} 隻");
+                    }
+                    return;
+                }
+
+                case "evolve":
+                {
+                    // 測試用：直接把族群平均推一段（單位 = 個體標準差），看分化會不會觸發
+                    if (!HostOnly("族群在房主那邊推進")) return;
+                    if (!DSTNetPlayer.CheatsAllowed) { DSTChat.System("這是作弊指令"); return; }
+                    if (args.Length < 4 || !int.TryParse(args[1], out int idx) || !TryFloat(args[3], out float sd))
+                    { DSTChat.System("用法：/evolve <編號（/pop 的）> <size|speed|notice> <幾個標準差，可負>"); return; }
+                    var c = DUST.Animals.DSTPopulation.RegionOf(me.transform.position);
+                    var r = DUST.Animals.DSTPopulation.Get(c.x, c.y);
+                    if (r == null || idx < 1 || idx > r.species.Count) { DSTChat.System("沒有這個編號（先 /pop）"); return; }
+                    var s = r.species[idx - 1];
+                    var cv = DUST.Animals.DSTEvolution.CV;
+                    switch (args[2].ToLowerInvariant())
+                    {
+                        case "size": s.zSize += sd * cv.x; break;
+                        case "speed": s.zSpeed += sd * cv.y; break;
+                        case "notice": s.zNotice += sd * cv.z; break;
+                        default: DSTChat.System("特徵只有 size、speed、notice"); return;
+                    }
+                    int score = DUST.Animals.DSTEvolution.Score(s, out _);
+                    if (score >= DUST.Animals.DSTEvolution.SpeciesScore)
+                    {
+                        string old = s.name;
+                        DUST.Animals.DSTPopulation.Speciate(r, s);
+                        DSTChat.System($"{old} 分化成新物種：{s.name}（離開再回來，新出現的群就是新物種）");
+                    }
+                    else DSTChat.System($"{s.name} 分化分數 {score}/{DUST.Animals.DSTEvolution.SpeciesScore}");
+                    return;
+                }
+
+                case "history":
+                {
+                    if (!HostOnly("事件紀錄存在房主那邊")) return;
+                    int n = 10;
+                    if (args.Length > 1 && (!int.TryParse(args[1], out n) || n < 1)) { DSTChat.System("用法：/history [筆數]"); return; }
+                    var list = DSTSave.Recent(Mathf.Min(n, 50));
+                    if (list.Count == 0) { DSTChat.System("還沒有事件"); return; }
+                    foreach (var e in list) DSTChat.System(DSTSave.Describe(e));
+                    return;
+                }
+
+                case "save":
+                    if (!HostOnly("只有房主存檔")) return;
+                    DSTSave.SaveAll();
+                    DSTChat.System("已存檔：" + DSTSave.Dir);
+                    return;
                 case "species":
                     var roster = DUST.Animals.DSTEcology.At(me.transform.position);
                     float hour = DUST.Animals.DSTEcology.Hour;
@@ -60,7 +129,7 @@ namespace DUST.UI
                         bool awake = DUST.Animals.DSTEcology.ActiveAt(g.activity, hour);
                         int alive = DUST.Animals.DSTProcSpawner.Instance ? DUST.Animals.DSTProcSpawner.Instance.Alive(g.key) : 0;
                         string herd = g.group.y > 2 ? $"群居 {g.group.x}-{g.group.y} 隻" : "獨居";
-                        DSTChat.System($"{i + 1}. {g.name}（{g.scientificName}）{DUST.Animals.DSTEcology.ActivityName(g.activity)}、{DUST.Animals.DSTEcology.TerrainName(g.terrain)}、{herd}　{(awake ? "活動中" : "休息中")}" +
+                        DSTChat.System($"{i + 1}. {g.name}（{g.scientificName}）{(g.Carnivore ? (DUST.Animals.DSTGenome.CanEat(g, g.Mass, -1, DSTNetPlayer.BodyMass) ? "肉食（會獵玩家）" : "肉食") : "草食")} {g.Mass:0} kg、{DUST.Animals.DSTEcology.ActivityName(g.activity)}、{DUST.Animals.DSTEcology.TerrainName(g.terrain)}、{herd}　{(awake ? "活動中" : "休息中")}" +
                                        (NetworkManager.Singleton && NetworkManager.Singleton.IsServer ? $"　附近 {alive} 隻" : ""));
                     }
                     return;
@@ -189,6 +258,25 @@ namespace DUST.UI
                     return;
                 }
 
+                case "ssf":
+                    DUST.Animals.DSTStepDebug.Enabled = Toggle(args, DUST.Animals.DSTStepDebug.Enabled);
+                    DSTChat.System(DUST.Animals.DSTStepDebug.Enabled
+                        ? "步伐選擇除錯：開（點越大越紅 = 權重越高，白線 = 抽中的一步；右下角 = 玩家指數 W）" + (NetworkManager.Singleton && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer ? "　※動物 AI 在房主那邊跑，客戶端看不到" : "")
+                        : "步伐選擇除錯：關");
+                    return;
+
+                case "hunger":
+                {
+                    if (NetworkManager.Singleton && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer) { DSTChat.System("動物 AI 在房主那邊跑，只有房主能用"); return; }
+                    float e = 0.1f;
+                    if (args.Length > 1 && !TryFloat(args[1], out e)) { DSTChat.System("用法：/hunger [0-1]"); return; }
+                    int count = 0;
+                    foreach (var a in DUST.Animals.DSTAnimal.All)
+                        if (a && a.IsAlive && (a.transform.position - me.transform.position).sqrMagnitude < 3600f) { a.SetEnergy(e); count++; }
+                    DSTChat.System($"附近 {count} 隻動物的能量設成 {Mathf.Clamp01(e):0.00}");
+                    return;
+                }
+
                 case "herds":
                     if (!DUST.Animals.DSTMigration.Available) { DSTChat.System("只有隨機世界有遷徙"); return; }
                     var herds = new System.Collections.Generic.List<DUST.Animals.DSTBand>();
@@ -235,6 +323,16 @@ namespace DUST.UI
             if (!me.InVehicle && me.Controller.enabled) return true;
             DSTChat.System("先下車再用");
             return false;
+        }
+
+        static string Pct(float logOffset) => $"{(Mathf.Exp(logOffset) - 1f) * 100f:+0.0;-0.0;0}%";
+
+        // 存檔、族群只在房主那邊；隨機世界才有
+        static bool HostOnly(string why)
+        {
+            if (NetworkManager.Singleton && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer) { DSTChat.System(why + "，只有房主能用"); return false; }
+            if (!DSTSave.Active) { DSTChat.System("只有隨機世界有存檔"); return false; }
+            return true;
         }
 
         static bool TryFloat(string s, out float v) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);

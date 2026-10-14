@@ -10,9 +10,28 @@ namespace DUST.Player
 {
     // 連線玩家：自己的角色才吃輸入、開攝影機；別人的角色只顯示身體，視角與蹲姿從網路同步。
     // 位置由 NetworkTransform（Owner 權威）同步，所以移動手感跟單機一樣。
+    // 血量由主機算（咬人的動物 AI 也在主機）；死掉後倒地，幾秒後回出生點重生。
     [RequireComponent(typeof(DSTPlayerController))]
-    public class DSTNetPlayer : NetworkBehaviour
+    public class DSTNetPlayer : NetworkBehaviour, IDSTDamageable
     {
+        // ------------------------------------------------------------------ 血量
+        public const float MaxHealth = 20f;          // 【建議】大型肉食動物一口約 5，四、五口會死
+        public const float BodyMass = 23f;           // 鬃狼平均體重（Wikipedia：20–30 kg，平均約 23 kg）；肉食動物用它判斷吃不吃得下
+        const float RegenDelay = 8f;                 // 多久沒受傷才開始回血【建議】
+        const float RegenPerSecond = 0.5f;           // 【建議】空血到滿約 40 秒
+        const float RespawnDelay = 5f;
+
+        readonly NetworkVariable<float> _health = new NetworkVariable<float>(MaxHealth);
+        readonly NetworkVariable<bool> _down = new NetworkVariable<bool>(false);
+        readonly NetworkVariable<bool> _creative = new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        public float Health => _health.Value;
+        public bool IsAlive => !_down.Value;
+        public bool IsCreative => _creative.Value;
+        float _lastHurt = -999f;
+        float _respawnAt, _hurtFlash;
+        string _deathCause;
+
         public Renderer[] body;              // 別人看得到的身體；自己只投影子
         public float spawnSpacing = 0.8f;    // 多人出生時左右錯開
 
@@ -91,14 +110,19 @@ namespace DUST.Player
                 DSTNetSession.SetLobbyCamera(false);
                 _needsPlacement = true;
                 TryPlace();
+                HelloRpc(DSTSave.LocalPlayerId);   // 告訴主機我是誰（存檔裡找得到就放回上次的位置）
             }
             _inVehicle.OnValueChanged += OnInVehicleChanged;
+            _down.OnValueChanged += OnDownChanged;
             Apply(_inVehicle.Value);
+            OnDownChanged(false, _down.Value);
         }
 
         public override void OnNetworkDespawn()
         {
             _inVehicle.OnValueChanged -= OnInVehicleChanged;
+            _down.OnValueChanged -= OnDownChanged;
+            if (IsServer) DSTSave.StorePlayer(this);   // 離線（或關房）時記下位置
             All.Remove(this);
             if (Local == this)
             {
@@ -120,9 +144,36 @@ namespace DUST.Player
                 return;
             }
             _needsPlacement = false;
-            var (pos, yaw) = SpawnPose();
+            var (pos, yaw) = _savedPose ?? SpawnPose();
+            _savedPose = null;
             _pc.Teleport(pos, yaw);
             _pc.enabled = !_inVehicle.Value;
+        }
+
+        // ------------------------------------------------------------------ 存檔裡的玩家
+        /// <summary>主機：這位玩家在存檔裡的身分（players/&lt;id&gt;.json）</summary>
+        public string SaveId { get; private set; }
+        (Vector3, float)? _savedPose;
+
+        [Rpc(SendTo.Server)]
+        void HelloRpc(string id, RpcParams rpc = default)
+        {
+            if (rpc.Receive.SenderClientId != OwnerClientId || string.IsNullOrEmpty(id)) return;
+            // 同一台電腦開兩個視窗測試時身分會一樣：第二個加上編號
+            string unique = id;
+            for (int n = 2; All.Exists(p => p && p != this && p.SaveId == unique); n++) unique = id + "_" + n;
+            SaveId = unique;
+            var rec = DSTSave.LoadPlayer(unique);
+            if (rec == null) return;
+            if (rec.health > 0f) _health.Value = Mathf.Min(rec.health, MaxHealth);
+            PlaceRpc(new Vector3(rec.x, rec.y + 0.1f, rec.z), rec.yaw);
+        }
+
+        [Rpc(SendTo.Owner)]
+        void PlaceRpc(Vector3 pos, float yaw)
+        {
+            if (_needsPlacement) { _savedPose = (pos, yaw); return; }
+            if (!_inVehicle.Value && IsAlive) _pc.Teleport(pos, yaw);
         }
 
         (Vector3, float) SpawnPose()
@@ -170,7 +221,7 @@ namespace DUST.Player
 
         void UpdateLocalControl()
         {
-            bool on = !_inVehicle.Value && !_scripted;
+            bool on = !_inVehicle.Value && !_scripted && !_down.Value;
             _pc.enabled = on;
             if (_interactor) _interactor.enabled = on;
         }
@@ -204,12 +255,15 @@ namespace DUST.Player
         void Update()
         {
             if (!IsSpawned) return;
+            if (IsServer) Regenerate();
             if (IsOwner)
             {
                 TryPlace();
                 if (Mathf.Abs(_pitch.Value - _pc.Pitch) > 0.5f) _pitch.Value = _pc.Pitch;
                 if (_crouching.Value != _pc.IsCrouching) _crouching.Value = _pc.IsCrouching;
                 if (_sprinting.Value != _pc.IsSprinting) _sprinting.Value = _pc.IsSprinting;
+                if (_creative.Value != _pc.Creative) _creative.Value = _pc.Creative;
+                if (_down.Value && _respawnAt > 0f && Time.time >= _respawnAt) Respawn();
                 return;
             }
 
@@ -323,9 +377,121 @@ namespace DUST.Player
         [Rpc(SendTo.Everyone)]
         void NoticeRpc(string text) => DUST.UI.DSTChat.System(text);
 
-        // 揮拳打到東西：交給主機判定，動物的血量只在主機上算
+        // ------------------------------------------------------------------ 受傷 / 死亡 / 重生
+        /// <summary>只在主機上有效（動物咬人在主機上判定）。在車上、創造模式、已經倒下都不會受傷。</summary>
+        public void TakeDamage(float amount, Transform source)
+        {
+            if (!IsServer || !IsAlive || InVehicle || IsCreative || amount <= 0f) return;
+            _lastHurt = Time.time;
+            _health.Value = Mathf.Max(0f, _health.Value - amount);
+            Vector3 from = source ? source.position : transform.position;
+            HurtRpc(from);
+            if (_health.Value > 0f) return;
+
+            _down.Value = true;
+            string killer = "不明的東西";
+            if (source)
+            {
+                var a = source.GetComponentInParent<DUST.Animals.DSTAnimal>();
+                if (a) killer = a.Genome != null ? a.Genome.name : a.species ? a.species.displayName : a.name;
+            }
+            NoticeRpc($"{DisplayName} 被{killer}咬死了");
+            DSTSave.Log("player_death", DisplayName, killer, transform.position);
+            DiedRpc(killer);
+        }
+
+        void Regenerate()
+        {
+            if (!IsAlive || _health.Value >= MaxHealth || Time.time - _lastHurt < RegenDelay) return;
+            _health.Value = Mathf.Min(MaxHealth, _health.Value + RegenPerSecond * Time.deltaTime);
+        }
+
+        [Rpc(SendTo.Owner)]
+        void HurtRpc(Vector3 from) => _hurtFlash = 1f;
+
+        [Rpc(SendTo.Owner)]
+        void DiedRpc(string killer)
+        {
+            _deathCause = killer;
+            _respawnAt = Time.time + RespawnDelay;
+        }
+
+        // 自己的電腦：回出生點（位置是自己權威），再請主機補滿血
+        void Respawn()
+        {
+            _respawnAt = 0f;
+            var (pos, yaw) = SpawnPose();
+            _pc.Teleport(pos, yaw);
+            RespawnRpc();
+        }
+
+        [Rpc(SendTo.Server)]
+        void RespawnRpc(RpcParams rpc = default)
+        {
+            if (rpc.Receive.SenderClientId != OwnerClientId || IsAlive) return;
+            _health.Value = MaxHealth;
+            _lastHurt = -999f;
+            _down.Value = false;
+        }
+
+        // 倒下：所有人看到身體側倒；自己不能動
+        void OnDownChanged(bool _, bool down)
+        {
+            var rig = GetComponent<DSTWolfRig>();
+            if (rig) rig.SetDown(down);
+            if (IsOwner) UpdateLocalControl();
+        }
+
+        // ------------------------------------------------------------------ 血量畫面（只畫自己的）
+        GUIStyle _bigText;
+
+        void OnGUI()
+        {
+            if (!IsOwner || !IsSpawned) return;
+            if (Event.current.type != EventType.Repaint) return;
+            float w = Screen.width, h = Screen.height;
+
+            // 受傷：畫面邊緣閃紅
+            if (_hurtFlash > 0f)
+            {
+                _hurtFlash = Mathf.Max(0f, _hurtFlash - Time.deltaTime * 1.5f);
+                GUI.color = new Color(0.7f, 0f, 0f, 0.35f * _hurtFlash);
+                float e = Mathf.Min(w, h) * 0.08f;
+                GUI.DrawTexture(new Rect(0, 0, w, e), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(0, h - e, w, e), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(0, 0, e, h), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(w - e, 0, e, h), Texture2D.whiteTexture);
+            }
+
+            // 血條（左下角；滿血就藏起來）
+            if ((_health.Value < MaxHealth - 0.01f || _down.Value) && !_inVehicle.Value)
+            {
+                var r = new Rect(24f, h - 48f, 220f, 14f);
+                GUI.color = new Color(0f, 0f, 0f, 0.55f);
+                GUI.DrawTexture(new Rect(r.x - 2f, r.y - 2f, r.width + 4f, r.height + 4f), Texture2D.whiteTexture);
+                float f = _health.Value / MaxHealth;
+                GUI.color = Color.Lerp(new Color(0.75f, 0.1f, 0.08f), new Color(0.85f, 0.75f, 0.35f), f);
+                GUI.DrawTexture(new Rect(r.x, r.y, r.width * f, r.height), Texture2D.whiteTexture);
+            }
+
+            // 死亡畫面
+            if (_down.Value)
+            {
+                GUI.color = new Color(0.25f, 0f, 0f, 0.45f);
+                GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
+                _bigText ??= new GUIStyle(GUI.skin.label) { fontSize = 34, alignment = TextAnchor.MiddleCenter, richText = true };
+                GUI.color = Color.white;
+                float left = Mathf.Max(0f, _respawnAt - Time.time);
+                GUI.Label(new Rect(0, h * 0.4f, w, 60f), "你死了", _bigText);
+                GUI.Label(new Rect(0, h * 0.4f + 50f, w, 40f), $"<size=20>被{_deathCause ?? "不明的東西"}咬死　{Mathf.CeilToInt(left)} 秒後在出生點重生</size>", _bigText);
+            }
+            GUI.color = Color.white;
+        }
+
+        // 揮拳打到東西：交給主機判定，動物的血量只在主機上算（不能打其他玩家）
         public void Punch(IDSTDamageable target, float damage)
         {
+            if (target is DSTNetPlayer) return;
             if (target is Component c && c.TryGetComponent<NetworkObject>(out var no) && no.IsSpawned)
                 PunchRpc(no, damage);
             else
@@ -338,6 +504,7 @@ namespace DUST.Player
             if (!target.TryGet(out var no)) return;
             // 簡單防呆：距離太遠的拳不算
             if (Vector3.Distance(no.transform.position, transform.position) > 5f) return;
+            if (no.GetComponent<DSTNetPlayer>() || !IsAlive) return;
             var d = no.GetComponent<IDSTDamageable>();
             if (d != null && d.IsAlive) d.TakeDamage(damage, transform);
         }
