@@ -55,11 +55,12 @@ namespace DUST.Vehicles
             _dust = BuildParticles("ExhaustDust", 1500, false);
             _smoke = BuildParticles("TyreSmoke", 400, true);
             BuildAudio();
+            BuildSupersonic();
         }
 
         void OnDestroy()
         {
-            if (_jet) _jet.TouchDown -= OnTouchDown;
+            if (_jet) { _jet.TouchDown -= OnTouchDown; _jet.SoundBarrier -= OnSoundBarrier; }
         }
 
         // ------------------------------------------------------------------ 後燃器
@@ -360,11 +361,228 @@ namespace DUST.Vehicles
             _whine.pitch = 0.5f + 0.6f * _spool;
         }
 
+        // ------------------------------------------------------------------ 超音速：凝結尾、翼尖渦流、音障雲、音爆
+        // 凝結尾：遊戲高度 2.5 km 以上（≈ 實機 10 km，噴流的水氣在高空凍結），從噴口後 5 m 開始拖 30 秒
+        // 翼尖渦流：大 G（> 3.5）又在濃的空氣裡，翼尖拉出細白線
+        // 音障雲（Prandtl–Glauert 凝結雲）：照實拍（玩家給的照片）是包住機身中後段的一團蓬鬆白霧，
+        //   從座艙後面開始、往後張開成鐘形，邊緣軟、飛機在霧裡面看得到。
+        //   做法：沿著鐘形表面一直噴很短命的柔軟白霧粒子（跟著飛機的本地座標），疊起來有體積感；
+        //   濃度照 Prandtl–Glauert 的 1/√|1−M²|（M = 1 最濃、往兩邊掉），再乘空氣密度（高空太稀不會凝結）
+        // 音爆：馬赫錐掃過旁觀者的那一刻才聽得到（N 波：雙響 + 低頻）；錐外（飛機前方）連引擎聲都還沒到
+        //       駕駛自己只有突破音障那一下悶響
+        public Material contrailMaterial;          // HDRP Unlit 透明，淡出做在貼圖裡（HDRP Unlit 不吃頂點色）
+        public Material vaporMaterial;            // 圓形柔邊霧粒子（HDRP Unlit 透明）
+        public float contrailAltitude = 2500f;
+        public float boomRange = 6000f;
+
+        TrailRenderer[] _contrails, _vortices;
+        ParticleSystem _vapor;
+        public float VaporDensity { get; private set; }   // 0..1，給測試看
+        AudioSource _boom;
+        AudioClip _boomClip;
+        AudioListener _listener;
+        bool _inCone;
+        float _boomCooldown;
+        static readonly int UnlitColorId = Shader.PropertyToID("_UnlitColor");
+
+        void BuildSupersonic()
+        {
+            if (contrailMaterial)
+            {
+                _contrails = new TrailRenderer[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    if (!_nozzles[i]) continue;
+                    var t = Trail("Contrail_" + i, contrailMaterial, 30f, 15f, AnimationCurve.Linear(0f, 0.5f, 1f, 9f));
+                    t.transform.position = _nozzles[i].position - transform.forward * 5f;
+                    _contrails[i] = t;
+                }
+                _vortices = new TrailRenderer[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    var t = Trail("WingtipVortex_" + i, contrailMaterial, 1.2f, 2f, AnimationCurve.Linear(0f, 0.12f, 1f, 0.6f));
+                    t.transform.localPosition = new Vector3(i == 0 ? -3.45f : 3.45f, 1.33f, -3.75f);
+                    _vortices[i] = t;
+                }
+            }
+            if (vaporMaterial)
+            {
+                var go = new GameObject("VaporCloud");
+                go.transform.SetParent(transform, false);
+                var ps = go.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.loop = true;
+                main.playOnAwake = false;
+                main.simulationSpace = ParticleSystemSimulationSpace.Local;   // 凝結雲一直在同一個位置重新生成，跟著飛機
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.3f);
+                main.startSpeed = 0f;
+                main.startSize = new ParticleSystem.MinMaxCurve(1.1f, 2.4f);
+                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+                main.maxParticles = 1500;
+                var em = ps.emission;
+                em.rateOverTime = 0f;
+                var shape = ps.shape;
+                shape.enabled = false;
+                var r = go.GetComponent<ParticleSystemRenderer>();
+                r.sharedMaterial = vaporMaterial;
+                r.renderMode = ParticleSystemRenderMode.Billboard;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                r.sortMode = ParticleSystemSortMode.Distance;
+                ps.Play();
+                _vapor = ps;
+            }
+            _boomClip = SynthBoom();
+            var b = new GameObject("SonicBoom");
+            b.transform.SetParent(transform, false);
+            _boom = b.AddComponent<AudioSource>();
+            _boom.spatialBlend = 0f;        // 音爆是一整片壓力波，不分方向
+            _boom.playOnAwake = false;
+            _jet.SoundBarrier += OnSoundBarrier;
+        }
+
+        TrailRenderer Trail(string name, Material mat, float time, float minVertex, AnimationCurve width)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            var t = go.AddComponent<TrailRenderer>();
+            t.sharedMaterial = mat;
+            t.time = time;
+            t.minVertexDistance = minVertex;
+            t.widthCurve = width;
+            t.widthMultiplier = 1f;
+            t.textureMode = LineTextureMode.Stretch;
+            t.alignment = LineAlignment.View;
+            t.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            t.receiveShadows = false;
+            t.emitting = false;
+            t.numCapVertices = 2;
+            return t;
+        }
+
+        // Prandtl–Glauert：壓力係數 ∝ 1/√|1−M²|，M = 1 發散。換成 0..1 的凝結濃度（M 0.9 ≈ 0.3、0.95 ≈ 0.7、
+        // 0.98–1.02 ≈ 1、1.05 ≈ 0.65、1.1 ≈ 0.25、1.15 以上沒有）
+        static float PrandtlGlauert(float m)
+        {
+            float d = Mathf.Abs(1f - m * m);
+            if (d < 1e-4f) return 1f;
+            return Mathf.Clamp01((1f / Mathf.Sqrt(d) - 1.6f) / 2.4f);
+        }
+
+        // 鐘形表面上的一點（飛機本地座標，半尺寸）：從座艙後（z +1.8）往後到 z −3.4，半徑 1.5 → 3.2 m（前緣是圓頂、不是尖的）
+        static Vector3 VaporPoint(float s, float angle, float jitter)
+        {
+            float z = Mathf.Lerp(1.8f, -3.4f, s);
+            float rad = Mathf.Lerp(1.5f, 3.2f, Mathf.Sqrt(s)) * (1f + jitter);
+            return new Vector3(Mathf.Cos(angle) * rad, 1.2f + Mathf.Sin(angle) * rad * 0.8f, z);
+        }
+
+        // N 波：機頭震波 + 機尾震波兩響（相隔 0.12 s），每響是很陡的起音 + 快速衰減的噪音，後面拖一段低頻轟隆
+        static AudioClip SynthBoom()
+        {
+            const int rate = 22050;
+            int len = rate * 2;
+            var d = new float[len];
+            var rng = new System.Random(2830);
+            float brown = 0f;
+            for (int i = 0; i < len; i++)
+            {
+                float t = i / (float)rate;
+                float white = (float)rng.NextDouble() * 2f - 1f;
+                brown = Mathf.Clamp(brown + white * 0.08f, -1f, 1f) * 0.995f;
+                float crack1 = t < 0.002f ? t / 0.002f : Mathf.Exp(-(t - 0.002f) / 0.05f);
+                float t2 = t - 0.12f;
+                float crack2 = t2 < 0f ? 0f : t2 < 0.002f ? t2 / 0.002f : Mathf.Exp(-(t2 - 0.002f) / 0.06f);
+                float rumble = Mathf.Exp(-t / 0.6f) * (0.6f * Mathf.Sin(2f * Mathf.PI * 38f * t) + 0.5f * brown);
+                d[i] = Mathf.Clamp(0.9f * crack1 * (0.6f + 0.4f * white) - 0.8f * crack2 * (0.6f + 0.4f * white) + 0.7f * rumble, -1f, 1f);
+            }
+            var clip = AudioClip.Create("SonicBoom", len, 1, rate, false);
+            clip.SetData(d, 0);
+            return clip;
+        }
+
+        void OnSoundBarrier(bool up)
+        {
+            // 駕駛那台：突破音障只有一下悶響（震波在機身後面，駕駛聽不到真正的音爆）
+            if (up && _boom && _jet.PlayerControlled) _boom.PlayOneShot(_boomClip, 0.25f);
+        }
+
+        // 給測試 / 除錯：目前這台電腦的聽者在不在馬赫錐裡、響過幾次
+        public bool ListenerInCone => _inCone;
+        public int BoomCount { get; private set; }
+
+        void UpdateSupersonic(float dt)
+        {
+            float mach = _jet.Mach;
+            bool hidden = _jet.Hidden;
+            // 凝結尾（有遲滯，不要在臨界高度一直閃）
+            if (_contrails != null)
+                foreach (var c in _contrails)
+                {
+                    if (!c) continue;
+                    if (hidden || !_jet.EngineOn) { c.emitting = false; continue; }
+                    if (!c.emitting && _jet.Altitude > contrailAltitude + 100f) c.emitting = true;
+                    else if (c.emitting && _jet.Altitude < contrailAltitude - 100f) c.emitting = false;
+                    c.widthMultiplier = 0.7f + 0.6f * _jet.Throttle;
+                }
+            if (_vortices != null)
+                foreach (var v in _vortices)
+                    if (v) v.emitting = !hidden && _jet.GForce > 3.5f && _jet.AirDensity > 0.4f && _jet.AirSpeed > 100f;
+            // 音障雲：照 Prandtl–Glauert 曲線決定這一幀噴幾顆霧
+            VaporDensity = hidden ? 0f : PrandtlGlauert(mach) * Mathf.InverseLerp(0.25f, 0.6f, _jet.AirDensity);
+            if (_vapor && VaporDensity > 0.01f)
+            {
+                int n = Mathf.RoundToInt(VaporDensity * 2400f * dt + Random.value);
+                var ep = new ParticleSystem.EmitParams();
+                for (int i = 0; i < n; i++)
+                {
+                    // 後緣最濃最亮（照片），往前漸淡；後面大顆、前面小顆
+                    float s = 1f - Random.value * Random.value;
+                    ep.position = VaporPoint(s, Random.value * Mathf.PI * 2f, Random.Range(-0.25f, 0.1f));
+                    ep.startSize = Mathf.Lerp(0.9f, 2.6f, s) * Random.Range(0.8f, 1.2f);
+                    ep.startLifetime = Random.Range(0.1f, 0.28f);
+                    _vapor.Emit(ep, 1);
+                }
+            }
+            // 音爆：馬赫錐掃過這台電腦的聽者
+            if (!_listener) _listener = FindAnyObjectByType<AudioListener>();
+            _boomCooldown -= dt;
+            if (!_listener || hidden) { _inCone = false; return; }
+            Vector3 d = _listener.transform.position - transform.position;
+            float dist = d.magnitude;
+            bool near = dist < 40f;                       // 自己就是駕駛（追車鏡頭 / 座艙）
+            bool inCone = true;
+            if (mach > 1.01f && !near)
+            {
+                float mu = Mathf.Asin(1f / mach);           // 馬赫角
+                inCone = Vector3.Angle(d, -VelocityDir()) < mu * Mathf.Rad2Deg;
+                if (inCone && !_inCone && dist < boomRange && _boomCooldown <= 0f && _boom)
+                {
+                    _boom.PlayOneShot(_boomClip, Mathf.Clamp01(1.2f - dist / boomRange));
+                    _boomCooldown = 1.5f;
+                    BoomCount++;
+                }
+            }
+            _inCone = inCone;
+            // 錐外（飛機在前面還沒飛到）連引擎聲都還沒傳到
+            if (_roar) _roar.mute = !inCone;
+            if (_whine) _whine.mute = !inCone;
+        }
+
+        Vector3 VelocityDir()
+        {
+            var rb = _jet.GetComponent<Rigidbody>();
+            var v = rb && !rb.isKinematic ? rb.linearVelocity : transform.forward * _jet.AirSpeed;
+            return v.sqrMagnitude > 1f ? v.normalized : transform.forward;
+        }
+
         void LateUpdate()
         {
             UpdateFlames();
             UpdateDust();
             UpdateAudio(Time.deltaTime);
+            UpdateSupersonic(Time.deltaTime);
         }
     }
 }

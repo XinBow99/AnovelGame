@@ -12,7 +12,12 @@ namespace DUST.Vehicles
     // 操縱用「角速度指令」（像真機的電傳：桿量 = 想要的轉動速度，受 5 G 和空速限制），
     // 放開桿子就保持姿態。地面：三個起落架各自做彈簧阻尼懸吊、前輪轉向、煞車、側向摩擦。
     // 半尺寸世界（長度 ×0.5 → 速度 ×√0.5、質量 ×1/8、重力不變）：起飛 ~65 m/s、滑跑 ~500 m。
-    // 第一版限速 ~130 m/s（地形串流只有 ~400 m，超音速要等遠景地形）。
+    // 超音速（issue #7 第三步）：空氣密度隨高度指數變小（ρ = e^(−h/2124 m)：遊戲 5 km ≈ 實機 20 km 的空氣），
+    // 升力 / 阻力都乘 ρ；阻力係數隨馬赫數變（0.85 起穿音速阻力暴增、1.05 最大、之後下降）；
+    // 推力 × ρ^0.44（高空推力變小）×（1 + 1.15 M）（衝壓），M 2.80 以上推力淡出（R-15 的溫度上限）。
+    // 結果（數值解，tune2.js）：海平面極速 ~237 m/s（M 0.99，跟實機低空限速一樣）、3 km 以上 M 2.85；
+    // 5 km 高度從 M 1 加速到 M 2.8 約 90 秒（第一版照實機算要 7 分鐘以上，太慢）。
+    // 音速：半尺寸世界速度 ×√0.5 → 海平面 240 m/s、高空 209 m/s。
     //
     // 操作：W/S 油門（停在哪就是哪，85% 以上是後燃器）、A/D 滾轉、↑/↓ 俯仰（↓ = 拉桿抬頭）、
     // Q/E 方向舵（地面 = 前輪轉向）、Space 煞車、G 起落架、C 視角。
@@ -37,10 +42,15 @@ namespace DUST.Vehicles
         public float cl0 = 0.15f;               // 機翼 +2° 安裝角
         public float clPerRad = 4.6f;
         public float stallDeg = 16f;
-        public float dragK = 1.6f;              // 零升阻力：全後燃器極速 ~130 m/s
+        public float dragK = 0.508f;            // 零升阻力（× ρ × Cd(M)），跟下面三個一起用數值解調出來（tune2.js）
         public float inducedK = 0.09f;
         public float sideK = 6f;                // 側滑 → 側向力（機身 + 雙垂尾）
-        public float speedLimit = 135f;         // 第一版的速度上限（超過額外加阻力）
+        public float densityScaleHeight = 2124f;
+        public float thrustLapse = 0.44f;
+        public float ramFactor = 1.15f;
+        public float machLimit = 2.80f;      // 推力從這裡淡出、到 +0.15 歸零 → 極速 ~M 2.85
+        public float soundSpeedSea = 240f;
+        public float soundSpeedHigh = 209f;     // 2.7 km 以上
 
         [Header("Handling (MiG-25: fast, heavy, wide turns)")]
         public float maxPitchRate = 16f;        // 度/秒
@@ -95,6 +105,10 @@ namespace DUST.Vehicles
         public float AltitudeAGL { get; private set; }
         public float AirSpeed => _rb ? (_rb.isKinematic ? Mathf.Abs(_syncedSpeedKmh) / 3.6f : _rb.linearVelocity.magnitude) : 0f;
         public float AngleOfAttackDeg { get; private set; }
+        public float Altitude { get; private set; }     // 跑道（營地）高度以上，公尺
+        public float AirDensity { get; private set; } = 1f;
+        public float Mach { get; private set; }
+        public event System.Action<bool> SoundBarrier;  // true = 加速突破音障、false = 減速回到次音速
         public bool Stalling { get; private set; }
         public float GForce { get; private set; }
         public bool Hidden => _hidden;
@@ -306,6 +320,7 @@ namespace DUST.Vehicles
                 _syncedSpeedKmh = Mathf.Lerp(_syncedSpeedKmh, kmh, 0.2f);
                 _lastPosition = transform.position;
                 DecodeControls(_netControls.Value);
+                UpdateAtmosphere(AirSpeed);
                 Grounded = Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, 1.2f, ~0, QueryTriggerInteraction.Ignore);
                 return;
             }
@@ -324,11 +339,15 @@ namespace DUST.Vehicles
             Vector3 fwd = transform.forward, up = transform.up, right = transform.right;
             float m = _rb.mass, g = Physics.gravity.magnitude;
 
+            UpdateAtmosphere(speed);
+
             // 推力
             float thrust;
             if (!EngineOn) thrust = 0f;
             else if (_throttle < afterburnerFrom) thrust = Mathf.Lerp(idleThrust, dryThrust, _throttle / afterburnerFrom);
             else thrust = Mathf.Lerp(dryThrust, afterburnerThrust, Mathf.InverseLerp(afterburnerFrom, 1f, _throttle));
+            float rho = AirDensity, mach = Mach;
+            thrust *= Mathf.Pow(rho, thrustLapse) * (1f + ramFactor * mach) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(machLimit, machLimit + 0.15f, mach)));
             _rb.AddForce(fwd * thrust * m * g);
 
             // 空氣動力
@@ -343,18 +362,18 @@ namespace DUST.Vehicles
             if (Mathf.Abs(alpha) > stall)
                 cl = Mathf.Sign(alpha) * clMax * Mathf.Lerp(0.55f, 0.2f, Mathf.InverseLerp(stall, stall * 2.5f, Mathf.Abs(alpha)));
             cl += _flap01 * 0.25f;                               // 襟翼
-            float q = speed * speed;
+            float q = rho * speed * speed;   // 動壓（÷½ 已併進係數）
             if (speed > 1f)
             {
                 Vector3 vdir = v / speed;
                 Vector3 liftDir = Vector3.Cross(vdir, right).normalized;
-                float drag = dragK * (1f + _gear01 * 0.35f + _flap01 * 0.25f) + inducedK * liftK * cl * cl;
-                if (speed > speedLimit) drag += dragK * 4f * (speed - speedLimit) / speedLimit;
+                float drag = dragK * (DragCoefficient(mach) + _gear01 * 0.35f + _flap01 * 0.25f) + inducedK * liftK * cl * cl;
+                if (mach > machLimit + 0.3f) drag += dragK * 6f * (mach - machLimit - 0.3f);   // 結構極限
                 _rb.AddForce(liftDir * liftK * q * cl - vdir * drag * q - right * sideK * q * beta);
             }
 
             // 操縱：角速度指令（本地座標：x 正 = 低頭、y 正 = 右轉、z 正 = 左滾）
-            float authority = Mathf.SmoothStep(0f, 1f, speed / controlFullSpeed);
+            float authority = Mathf.SmoothStep(0f, 1f, Mathf.Sqrt(rho) * speed / controlFullSpeed);   // 舵面效果看動壓，高空要飛更快才夠力
             float gLimitRate = speed > 5f ? maxG * g / speed * Mathf.Rad2Deg : maxPitchRate;
             // 攻角限制器：接近限制時把那個方向的桿量淡掉（玩家拉滿也不會失速翻掉）
             float pitchIn = _pitchIn;
@@ -378,7 +397,8 @@ namespace DUST.Vehicles
             {
                 // 空中：放開桿子就保持姿態；機頭順著氣流（側滑會被風向舵效應拉正）；失速 / 太慢時機頭往下掉
                 pitchRate += Stalling ? (Mathf.Abs(alpha) - stall) * Mathf.Rad2Deg * Mathf.Sign(alpha) * 1.5f : 0f;
-                if (speed < 45f) pitchRate += (1f - speed / 45f) * 8f;
+                float eas = speed * Mathf.Sqrt(AirDensity);   // 等效空速：高空同樣的真空速，舵面和升力都比較弱
+                if (eas < 45f) pitchRate += (1f - eas / 45f) * 8f;
                 // 風向舵效應：氣流從右邊來（β > 0）→ 機頭往右轉對正（號誌寫反會發散成平螺旋，實測）
                 yawRate += beta * Mathf.Rad2Deg * 1.2f * Mathf.Clamp01(speed / 30f);
                 want = new Vector3(pitchRate, yawRate, rollRate);
@@ -407,6 +427,28 @@ namespace DUST.Vehicles
                 _netThrottle.Value = (byte)(EngineOn ? Mathf.Max(1, Mathf.RoundToInt(_throttle * 255f)) : 0);
                 _netControls.Value = EncodeControls();
             }
+        }
+
+        // 阻力係數：次音速 1 → 穿音速（M 0.85–1.05）暴增到 2.4 → 超音速慢慢降到 1.4
+        static float DragCoefficient(float m)
+        {
+            if (m < 0.85f) return 1f;
+            if (m < 1.05f) return 1f + 1.4f * Mathf.SmoothStep(0f, 1f, (m - 0.85f) / 0.2f);
+            if (m < 2f) return 2.4f - (m - 1.05f) / 0.95f;
+            return 1.4f;
+        }
+
+        void UpdateAtmosphere(float speed)
+        {
+            var w = DSTWorld.Instance;
+            float baseY = w && w.IsRandom && w.Gen != null ? w.Gen.SpawnHeight : 0f;
+            Altitude = transform.position.y - baseY;
+            AirDensity = Mathf.Exp(-Mathf.Max(0f, Altitude) / densityScaleHeight);
+            float a = Mathf.Lerp(soundSpeedSea, soundSpeedHigh, Mathf.Clamp01(Altitude / 2700f));
+            float newMach = speed / a;
+            if (Mach < 1f && newMach >= 1f) SoundBarrier?.Invoke(true);
+            else if (Mach >= 1f && newMach < 0.98f) SoundBarrier?.Invoke(false);
+            Mach = newMach;
         }
 
         bool WheelForces(float dt)
@@ -581,7 +623,9 @@ namespace DUST.Vehicles
             string thr = Mathf.RoundToInt(_throttle * 100f) + "%" + (Afterburner01 > 0f ? " 後燃器" : "");
             string gear = _gear01 >= 0.99f ? "放下" : _gear01 <= 0.01f ? "收起" : "收放中";
             string warn = Stalling ? "　⚠ 失速" : AltitudeAGL < 60f && _gear01 < 0.5f && !Grounded && _rb.linearVelocity.y < -3f ? "　⚠ 太低" : "";
-            DSTHud.TopPanel($"速度 {kmh:0} km/h　高度 {AltitudeAGL:0} m　油門 {thr}　{GForce:0.0} G　起落架 {gear}{warn}");
+            string alt = Altitude > 1000f ? $"{Altitude / 1000f:0.0} km" : $"{AltitudeAGL:0} m";
+            string mach = Mach >= 0.5f ? $"　M {Mach:0.00}" : "";
+            DSTHud.TopPanel($"速度 {kmh:0} km/h{mach}　高度 {alt}　油門 {thr}　{GForce:0.0} G　起落架 {gear}{warn}");
         }
     }
 }

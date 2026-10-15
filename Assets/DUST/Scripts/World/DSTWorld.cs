@@ -53,6 +53,7 @@ namespace DUST.World
         bool _active;
         bool _relocatePending;
         Transform _horizon;
+        DSTFarTerrain _far;
         Transform _root;
         readonly Dictionary<Vector2Int, DSTWorldChunk> _chunks = new Dictionary<Vector2Int, DSTWorldChunk>();
         readonly Dictionary<Vector2Int, (int lod, Task<DSTWorldChunk.Data> task)> _jobs = new Dictionary<Vector2Int, (int, Task<DSTWorldChunk.Data>)>();
@@ -155,6 +156,7 @@ namespace DUST.World
 
             _root = new GameObject("RandomWorld").transform;
             _horizon = CreateHorizon(_root);
+            _far = DSTFarTerrain.Create(_root, Gen, palette);   // 遠景地形（高空看得到幾公里外）
 
             // 營地旁的 MeBike 站（主機會在每根車柱生成一台）
             if (meBikeStation)
@@ -189,7 +191,7 @@ namespace DUST.World
         // 地平線：載入範圍外是一大片低一點的沙地，不然會看到天空貼圖下半部的山（在霧裡看起來像遠方的沙漠）
         Transform CreateHorizon(Transform parent)
         {
-            const float half = 4000f;
+            const float half = 200000f;   // 200 km：5 km 高空時邊緣只在水平線下 1.4°（天空貼圖下半部是岩石照片，不能露出來）
             var mesh = new Mesh { name = "Horizon" };
             mesh.vertices = new[] { new Vector3(-half, 0, -half), new Vector3(-half, 0, half), new Vector3(half, 0, half), new Vector3(half, 0, -half) };
             mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
@@ -328,9 +330,15 @@ namespace DUST.World
             _want.Clear();
             _wantCollider.Clear();
             var vc = ChunkOf(Viewer());
-            if (_horizon) _horizon.position = new Vector3(vc.x * DSTWorldChunk.Size, horizonHeight, vc.y * DSTWorldChunk.Size);
-            for (int dx = -viewRings; dx <= viewRings; dx++)
-            for (int dz = -viewRings; dz <= viewRings; dz++)
+            var viewer = Viewer();
+            // 有遠景地形之後，地平線那片低平面要再壓低（盆地裡的遠景網格比 -9 m 還低，會被它蓋過去）
+            if (_horizon) _horizon.position = new Vector3(vc.x * DSTWorldChunk.Size, _far ? Mathf.Min(horizonHeight, -60f) : horizonHeight, vc.y * DSTWorldChunk.Size);
+            if (_far) _far.Tick(viewer);
+            // 高空時近處細網格只要一小圈（遠景地形補上），省下來的工作給超音速時一直換的區塊
+            float viewerAgl = viewer.y - Gen.Height(viewer.x, viewer.z);
+            int rings = viewerAgl > 1500f ? 2 : viewerAgl > 500f ? 4 : viewRings;
+            for (int dx = -rings; dx <= rings; dx++)
+            for (int dz = -rings; dz <= rings; dz++)
             {
                 int ring = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dz));
                 _want[new Vector2Int(vc.x + dx, vc.y + dz)] = ring <= 1 ? 0 : ring <= 3 ? 1 : 2;
@@ -342,7 +350,9 @@ namespace DUST.World
                 AddColliderAnchor(v.transform.position);
                 // 快的載具（米格-25 滑跑 60 m/s ≈ 每秒一個區塊）：前方 1.5 / 3 秒的區塊也先烘碰撞，
                 // 不然機輪會掉進還沒有碰撞的區塊、撞上下一塊的邊（實測：滑跑到 400 m 速度從 61 掉到 32）
-                if (v.TryGetComponent<Rigidbody>(out var vrb) && !vrb.isKinematic && vrb.linearVelocity.sqrMagnitude > 15f * 15f)
+                var vp = v.transform.position;
+                if (v.TryGetComponent<Rigidbody>(out var vrb) && !vrb.isKinematic && vrb.linearVelocity.sqrMagnitude > 15f * 15f
+                    && vp.y - Gen.Height(vp.x, vp.z) < 150f)   // 高空不需要碰撞，別讓超音速的米格-25 一直叫前方區塊烘碰撞
                 {
                     AddColliderAnchor(v.transform.position + vrb.linearVelocity * 1.5f);
                     AddColliderAnchor(v.transform.position + vrb.linearVelocity * 3f);

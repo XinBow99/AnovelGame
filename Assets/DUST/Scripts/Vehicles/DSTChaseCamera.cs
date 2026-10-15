@@ -69,6 +69,7 @@ namespace DUST.Vehicles
             {
                 if (_defaultNear < 0f) _defaultNear = _cam.nearClipPlane;
                 _cam.nearClipPlane = cockpit && cockpitEye ? 0.05f : _defaultNear;   // 座艙裡儀表板、操縱桿很近
+                _cam.farClipPlane = 250000f;  // 高空（米格-25）：遠景地形 128 km、水平線霧帶 150 km、地平面 200 km；HDRP 用反向深度，近 0.05 也沒有精度問題
             }
             SetMotionBlur(!(cockpit && cockpitEye));   // 座艙裡鏡頭跟著機身動，動態模糊會把儀表板整片糊掉（實測）
             if (cockpit && cockpitEye)

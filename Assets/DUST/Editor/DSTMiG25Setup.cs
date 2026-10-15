@@ -60,6 +60,17 @@ namespace DUST.EditorTools
             var fx = go.AddComponent<DSTJetFX>();
             fx.flameMaterial = FlameMaterial();
             fx.hazeMaterial = HazeMaterial();
+            fx.contrailMaterial = SoftMaterial("M_DST_MiG25_Contrail", "T_DST_MiG25_Contrail", 256, 16, (u2, v2) =>
+                // 沿長度：剛噴出來的一小段透明（水氣還沒凝結），之後慢慢淡掉；橫向：兩邊軟邊
+                Mathf.SmoothStep(0f, 1f, u2 / 0.04f) * Mathf.Pow(1f - u2, 1.4f) * Mathf.Sin(v2 * Mathf.PI), 0.85f);
+            fx.vaporMaterial = SoftMaterial("M_DST_MiG25_Vapor", "T_DST_MiG25_Vapor", 64, 64, (u2, v2) =>
+            {
+                // 音障雲的霧粒子：圓形、邊緣很軟、中間有一點雲絮紋路（很多顆疊起來才是一團）
+                float dx = u2 - 0.5f, dy = v2 - 0.5f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
+                float soft = Mathf.Pow(Mathf.Clamp01(1f - r), 1.6f);
+                return soft * (0.75f + 0.25f * Mathf.PerlinNoise(u2 * 6f + 3f, v2 * 6f));
+            }, 0.18f);
             fx.dustMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/DUST/Clockwork/M_DST_StormDust.mat");
             if (!fx.dustMaterial) Debug.LogWarning("[DUST] 找不到 M_DST_StormDust（先跑 Clockwork setup），跑道揚沙不會出現");
             go.AddComponent<DSTPhysicsClaimer>();
@@ -322,6 +333,40 @@ namespace DUST.EditorTools
         {
             var m = DSTVehicleSetup.LitAt(MatDir, "M_DST_MiG25_Panel", Color.white, 0f, 0.45f);
             m.SetTexture("_BaseColorMap", tex);
+            HDMaterial.ValidateMaterial(m);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // 白色半透明（alpha 混合）的 HDRP Unlit：貼圖 alpha 決定形狀，執行期用 _UnlitColor 的 alpha 控制濃淡
+        static Material SoftMaterial(string name, string texName, int w, int h, System.Func<float, float, float> alpha, float baseAlpha)
+        {
+            string texPath = TexDir + "/" + texName + ".png";
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                t.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(alpha(x / (w - 1f), y / (h - 1f)))));
+            t.Apply();
+            System.IO.File.WriteAllBytes(texPath, t.EncodeToPNG());
+            Object.DestroyImmediate(t);
+            AssetDatabase.ImportAsset(texPath);
+            var ti = (TextureImporter)AssetImporter.GetAtPath(texPath);
+            ti.wrapMode = TextureWrapMode.Clamp;
+            ti.alphaIsTransparency = true;
+            ti.SaveAndReimport();
+            string path = MatDir + "/" + name + ".mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!m)
+            {
+                m = new Material(Shader.Find("HDRP/Unlit"));
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.SetTexture("_UnlitColorMap", AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+            m.SetColor("_UnlitColor", new Color(0.95f, 0.96f, 0.98f, baseAlpha));
+            m.SetFloat("_SurfaceType", 1f);
+            m.SetFloat("_BlendMode", 0f);                 // Alpha
+            m.SetFloat("_EnableFogOnTransparent", 1f);
+            m.SetFloat("_DoubleSidedEnable", 1f);
             HDMaterial.ValidateMaterial(m);
             EditorUtility.SetDirty(m);
             return m;
