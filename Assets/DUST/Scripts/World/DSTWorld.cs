@@ -259,6 +259,14 @@ namespace DUST.World
             foreach (var v in FindObjectsByType<DSTVehicleEntry>())
             {
                 if (v.Drivable is DSTBikeController) continue;   // MeBike 由站點自己管
+                if (v.Drivable is DSTJetController)
+                {
+                    // 米格-25：停在跑道頭，機頭朝跑道方向
+                    var p = Gen.AirstripStart + Gen.AirstripDir * 12f;
+                    float yaw = Mathf.Atan2(Gen.AirstripDir.x, Gen.AirstripDir.y) * Mathf.Rad2Deg;
+                    Place(v.transform, new Vector3(p.x, Gen.Height(p.x, p.y) + 0.1f, p.y), Quaternion.Euler(0f, yaw, 0f));
+                    continue;
+                }
                 float x = -3f + 4.5f * i++, z = 9f;
                 Place(v.transform, new Vector3(x, Gen.Height(x, z) + 0.15f, z), Quaternion.Euler(0f, 0f, 0f));
             }
@@ -328,7 +336,18 @@ namespace DUST.World
                 _want[new Vector2Int(vc.x + dx, vc.y + dz)] = ring <= 1 ? 0 : ring <= 3 ? 1 : 2;
             }
             foreach (var p in DSTNetPlayer.All) if (p) AddColliderAnchor(p.transform.position);
-            foreach (var v in DSTVehicleEntry.All) if (v) AddColliderAnchor(v.transform.position);
+            foreach (var v in DSTVehicleEntry.All)
+            {
+                if (!v) continue;
+                AddColliderAnchor(v.transform.position);
+                // 快的載具（米格-25 滑跑 60 m/s ≈ 每秒一個區塊）：前方 1.5 / 3 秒的區塊也先烘碰撞，
+                // 不然機輪會掉進還沒有碰撞的區塊、撞上下一塊的邊（實測：滑跑到 400 m 速度從 61 掉到 32）
+                if (v.TryGetComponent<Rigidbody>(out var vrb) && !vrb.isKinematic && vrb.linearVelocity.sqrMagnitude > 15f * 15f)
+                {
+                    AddColliderAnchor(v.transform.position + vrb.linearVelocity * 1.5f);
+                    AddColliderAnchor(v.transform.position + vrb.linearVelocity * 3f);
+                }
+            }
             foreach (var p in DSTPhysicsProp.All) if (p && !p.IsBroken) AddColliderAnchor(p.transform.position);
 
             // 卸載：離太遠、也沒人需要碰撞

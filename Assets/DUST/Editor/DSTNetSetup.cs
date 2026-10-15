@@ -27,6 +27,8 @@ namespace DUST.EditorTools
             SetupVehiclePrefab(DSTVehicleSetup.PrefabPath);
             if (AssetDatabase.LoadAssetAtPath<GameObject>(DSTDroneSetup.PrefabPath))
                 SetupVehiclePrefab(DSTDroneSetup.PrefabPath);
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(DSTMiG25Setup.PrefabPath))
+                SetupVehiclePrefab(DSTMiG25Setup.PrefabPath);
             // MeBike 是執行期由站點生成的，要註冊成連線 Prefab
             var meBike = AssetDatabase.LoadAssetAtPath<GameObject>(DSTMeBikeSetup.PrefabPath);
             if (meBike) SetupVehiclePrefab(DSTMeBikeSetup.PrefabPath);
@@ -91,7 +93,7 @@ namespace DUST.EditorTools
         }
 
         // ------------------------------------------------------------------ 車輛
-        static void SetupVehiclePrefab(string path)
+        internal static void SetupVehiclePrefab(string path)
         {
             var root = PrefabUtility.LoadPrefabContents(path);
             var no = Ensure<NetworkObject>(root);

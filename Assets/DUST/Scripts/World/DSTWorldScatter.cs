@@ -53,6 +53,7 @@ namespace DUST.World
                 float x = origin.x + lx, z = origin.z + lz;
                 if (x * x + z * z < 28f * 28f) return;             // 出生點留空
                 if (gen.SettlementContaining(x, z, 4f) != null) return;   // 聚落裡不放野外的石頭
+                if (gen.AirstripClearDistance(x, z) < DSTWorldGen.AirstripHalfWidth + 20f) return;   // 跑道 / 淨空區不放石頭 / 廢車
                 if (InSite(gen, x, z, 6f)) return;                 // 遺跡裡面不放大石頭
                 float y = gen.Height(x, z) - sink * scale;
                 var rot = alignToGround

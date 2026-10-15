@@ -64,10 +64,17 @@ namespace DUST.Vehicles
 #endif
             UpdateFreeLook();
             var t = target.transform;
+            if (!_cam) _cam = GetComponent<Camera>();
+            if (_cam)
+            {
+                if (_defaultNear < 0f) _defaultNear = _cam.nearClipPlane;
+                _cam.nearClipPlane = cockpit && cockpitEye ? 0.05f : _defaultNear;   // 座艙裡儀表板、操縱桿很近
+            }
+            SetMotionBlur(!(cockpit && cockpitEye));   // 座艙裡鏡頭跟著機身動，動態模糊會把儀表板整片糊掉（實測）
             if (cockpit && cockpitEye)
             {
-                // 駕駛座：轉頭看（左右 ±120°、上下 ±60°）
-                var head = Quaternion.LookRotation(t.forward, t.up) * Quaternion.Euler(Mathf.Clamp(_freePitch, -60f, 60f), Mathf.Clamp(_freeYaw, -120f, 120f), 0f);
+                // 駕駛座：轉頭看（左右 ±120°、上下 ±60°）。基準方向跟著眼睛標記（米格-25 往下看 8° 才看得到儀表板）
+                var head = Quaternion.LookRotation(cockpitEye.forward, cockpitEye.up) * Quaternion.Euler(Mathf.Clamp(_freePitch, -60f, 60f), Mathf.Clamp(_freeYaw, -120f, 120f), 0f);
                 transform.SetPositionAndRotation(cockpitEye.position, head);
                 return;
             }
@@ -117,6 +124,20 @@ namespace DUST.Vehicles
         }
 
         float _yawVel, _pitchVel;
+        bool? _blurOn;
+
+        void SetMotionBlur(bool on)
+        {
+            if (_blurOn == on || !_cam) return;
+            _blurOn = on;
+            var hd = GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>();
+            if (!hd) return;
+            hd.customRenderingSettings = true;
+            hd.renderingPathCustomFrameSettingsOverrideMask.mask[(uint)UnityEngine.Rendering.HighDefinition.FrameSettingsField.MotionBlur] = true;
+            hd.renderingPathCustomFrameSettings.SetEnabled(UnityEngine.Rendering.HighDefinition.FrameSettingsField.MotionBlur, on);
+        }
+        Camera _cam;
+        float _defaultNear = -1f;
 
         bool Moving()
         {

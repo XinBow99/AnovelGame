@@ -17,6 +17,39 @@ namespace DUST.World
         {
             Seed = seed;
             _n = new DSTNoise(seed);
+            // 跑道（米格-25，issue #7）：從營地邊往「家旁聚落」的反方向拉一條 900 m 的乾湖床跑道。
+            // 半尺寸世界：實機起飛滑跑約 1.2 km → 這裡 ~600 m，留 300 m 給中止起飛 / 降落。
+            float a = DSTNoise.Hash01(seed, 0, 0, 601) * Mathf.PI * 2f;   // 跟 ComputeSettlement 的家聚落同一個角度
+            AirstripDir = -new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            AirstripStart = AirstripDir * 45f;
+            AirstripEnd = AirstripDir * (45f + AirstripLength);
+        }
+
+        // ------------------------------------------------------------------ 跑道
+        public const float AirstripLength = 900f;
+        public const float AirstripHalfWidth = 15f;
+        public const float AirstripBlend = 35f;      // 跑道兩側的緩坡
+        public const float AirstripClear = 400f;     // 跑道尾端再整平 400 m 的進場淨空區（3° 下滑道在跑道頭只剩 10 m 高，
+                                                     // 沒整平時會擦到跑道外 8 m 高的沙丘，實測）
+        public readonly Vector2 AirstripStart, AirstripEnd, AirstripDir;
+
+        /// <summary>到跑道中心線（線段）的水平距離</summary>
+        public float AirstripDistance(float x, float z)
+        {
+            var p = new Vector2(x, z) - AirstripStart;
+            float t = Mathf.Clamp(Vector2.Dot(p, AirstripDir), 0f, AirstripLength);
+            return (p - AirstripDir * t).magnitude;
+        }
+
+        public bool OnAirstrip(float x, float z, float margin = 0f) => AirstripDistance(x, z) < AirstripHalfWidth + margin;
+
+        /// <summary>到「跑道 + 兩端淨空區」中心線的水平距離（整平用；路面只畫在跑道本身）</summary>
+        public float AirstripClearDistance(float x, float z)
+        {
+            var p = new Vector2(x, z) - AirstripStart;
+            // 只延伸跑道尾端：起點那頭是營地（本來就整平到同一高度），再往後會切過家旁的聚落
+            float t = Mathf.Clamp(Vector2.Dot(p, AirstripDir), 0f, AirstripLength + AirstripClear);
+            return (p - AirstripDir * t).magnitude;
         }
 
         public struct Site
@@ -86,6 +119,19 @@ namespace DUST.World
                     road = 0f;
                 }
             }
+
+            // 跑道：整平成營地高度（乾湖床），路面用夯實土路的材質
+            float cd = AirstripClearDistance(x, z);
+            if (cd < AirstripHalfWidth + 15f + AirstripBlend * 2f)
+            {
+                // 跑道 + 淨空區整平（淨空區比跑道寬一點、緩坡更長，進場時不會擦到兩旁的沙丘）
+                float w = Smooth(AirstripHalfWidth + 15f, AirstripHalfWidth + 15f + AirstripBlend * 2f, cd);
+                h = Mathf.Lerp(SpawnHeight, h, w);
+                rock *= w;
+                float ad = AirstripDistance(x, z);
+                float edge = _n.Noise(x / 4.3f, z / 4.3f) * 1.2f;
+                road = Mathf.Max(road, 1f - Smooth(AirstripHalfWidth - 1.5f, AirstripHalfWidth + 1.5f, ad + edge));
+            }
             return h;
         }
 
@@ -150,6 +196,7 @@ namespace DUST.World
         {
             float d = Mathf.Sqrt(x * x + z * z);
             if (d < SpawnFlatRadius + 40f) { kind = RegionKind.Camp; return "營地"; }
+            if (OnAirstrip(x, z, 8f)) { kind = RegionKind.Camp; return "營地跑道"; }
 
             var s = SettlementContaining(x, z);
             if (s != null) { kind = RegionKind.Settlement; return s.Title; }
@@ -230,6 +277,7 @@ namespace DUST.World
                 var st = SettlementAt(sx + i, sz + j);
                 if (st != null && Vector2.Distance(c, st.center) < st.radius + SettleBlend + radius + 30f) return s;
             }
+            if (AirstripClearDistance(c.x, c.y) < radius + AirstripHalfWidth + AirstripBlend * 3f) return s;   // 不蓋在跑道 / 淨空區上
             s.exists = true;
             s.center = c;
             s.radius = radius;
@@ -266,6 +314,7 @@ namespace DUST.World
                 float fz = 0.2f + 0.6f * DSTNoise.Hash01(Seed, cellX, cellZ, 13);
                 c = new Vector2((cellX + fx) * SettleCell, (cellZ + fz) * SettleCell);
                 if (c.magnitude < 450f) return null;          // 出生點那個附近不要再擠一個
+                if (AirstripClearDistance(c.x, c.y) < 200f) return null;   // 跑道 / 淨空區上不蓋聚落（聚落半徑 + 整平緩坡）
                 Raw(c.x, c.y, out float rock);
                 if (rock > 0.1f) return null;                 // 不蓋在台地上
             }
