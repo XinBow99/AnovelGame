@@ -60,6 +60,17 @@ namespace DUST.EditorTools
             var fx = go.AddComponent<DSTJetFX>();
             fx.flameMaterial = FlameMaterial();
             fx.hazeMaterial = HazeMaterial();
+            fx.nozzleMaterial = AdditiveMaterial("M_DST_MiG25_NozzleFace", "T_DST_MiG25_NozzleFace", 128, NozzleFace, false);
+            fx.lampMaterial = AdditiveMaterial("M_DST_MiG25_Lamp", "T_DST_MiG25_Lamp", 64, (u2, v2) =>
+            {
+                float r = Mathf.Sqrt((u2 - 0.5f) * (u2 - 0.5f) + (v2 - 0.5f) * (v2 - 0.5f)) * 2f;
+                float k = Mathf.Pow(Mathf.Clamp01(1f - r), 2.2f) + 0.6f * Mathf.Clamp01(1f - r / 0.25f);   // 柔光暈 + 亮芯
+                return new Color(k, k, k, k);
+            }, false);
+            // 減速傘：米白尼龍（蘇聯 / 印度 PTK 系列傘衣多為白、淺灰），雙面
+            fx.chuteMaterial = TwoSided(DSTVehicleSetup.LitAt(MatDir, "M_DST_MiG25_Chute", Color.white, 0f, 0.25f));
+            fx.chuteMaterial.SetTexture("_BaseColorMap", ChuteTexture());
+            HDMaterial.ValidateMaterial(fx.chuteMaterial);
             fx.contrailMaterial = SoftMaterial("M_DST_MiG25_Contrail", "T_DST_MiG25_Contrail", 256, 16, (u2, v2) =>
                 // 沿長度：剛噴出來的一小段透明（水氣還沒凝結），之後慢慢淡掉；橫向：兩邊軟邊
                 Mathf.SmoothStep(0f, 1f, u2 / 0.04f) * Mathf.Pow(1f - u2, 1.4f) * Mathf.Sin(v2 * Mathf.PI), 0.85f);
@@ -151,7 +162,7 @@ namespace DUST.EditorTools
             for (int x = 0; x < W; x++)
             {
                 float u = x / (W - 1f);
-                float body = Mathf.Exp(-2.6f * u) * (1f - Mathf.SmoothStep(0.75f, 1f, u));
+                float body = Mathf.Exp(-1.8f * u) * (1f - Edge(0.7f, 1f, u));   // 噴口處 1、往後慢慢暗、尾端收掉
                 float diamonds = 0.65f + 0.35f * Mathf.Pow(Mathf.Cos(u * Mathf.PI * 9f), 2f) * (1f - u);
                 float k = Mathf.Clamp01(body * diamonds);
                 for (int y = 0; y < H; y++) t.SetPixel(x, y, new Color(k, k, k, k));
@@ -184,6 +195,92 @@ namespace DUST.EditorTools
             m.SetFloat("_BlendMode", 1f);                 // Additive
             m.SetFloat("_EnableFogOnTransparent", 1f);
             m.SetFloat("_DoubleSidedEnable", 1f);      // 雙面：噴口光盤從後面看才看得到（亮度已經壓低，兩層疊加沒關係）
+            HDMaterial.ValidateMaterial(m);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // GLSL 式的 smoothstep（Mathf.SmoothStep 是內插，不是邊緣函數）
+        static float Edge(float e0, float e1, float x) => Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(e0, e1, x));
+
+        static float Band(float x, float c, float w) => Mathf.Clamp01(1f - Mathf.Abs(x - c) / w);
+
+        // 後燃器噴口面（照 Commons 上 MiG-25RB 起飛的正後方照）：外圈燒紅的橘色內襯、裡面黃白斑駁的火焰，
+        // 疊著藍紫色的火焰穩定器（兩圈 V 形環 + 8 根放射狀支架），中心是偏粉的整流錐
+        static Color NozzleFace(float u, float v)
+        {
+            float dx = u - 0.5f, dy = v - 0.5f;
+            float r = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
+            if (r > 1f) return Color.clear;
+            float a = Mathf.Atan2(dy, dx);
+            float n = Mathf.PerlinNoise(u * 9f + 1.7f, v * 9f + 4.1f);
+            float n2 = Mathf.PerlinNoise(u * 23f + 9f, v * 23f + 2f);
+            Color fill = Color.Lerp(new Color(1f, 0.86f, 0.6f), new Color(1f, 0.45f, 0.13f), Edge(0.5f, 0.97f, r));
+            float k = Mathf.Lerp(0.55f, 1f, n) * (0.8f + 0.2f * n2);
+            float ring = Mathf.Max(Band(r, 0.38f, 0.05f), Band(r, 0.68f, 0.055f));
+            float spoke = Band(Mathf.Repeat(a / (Mathf.PI * 2f) * 8f, 1f), 0.5f, 0.08f) * Edge(0.2f, 0.3f, r) * (1f - Edge(0.78f, 0.88f, r));
+            float holder = Mathf.Clamp01(Mathf.Max(ring, spoke) * (0.55f + 0.7f * n2));
+            Color c = Color.Lerp(fill * k, new Color(0.6f, 0.48f, 1f) * 0.85f, holder * 0.75f);
+            c = Color.Lerp(c, new Color(0.9f, 0.5f, 0.72f) * 0.65f, 1f - Edge(0.08f, 0.18f, r));
+            c *= 1f - Edge(0.93f, 1f, r);
+            c.a = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+            return c;
+        }
+
+        // 減速傘布：米白尼龍，沿傘軸一圈圈帶狀縫（帶狀傘的透氣縫，看起來是一條條暗線），四瓣的谷線縫邊
+        static Texture2D ChuteTexture()
+        {
+            const int W = 128, H = 128;
+            string texPath = TexDir + "/T_DST_MiG25_Chute.png";
+            var t = new Texture2D(W, H, TextureFormat.RGBA32, false);
+            var cloth = new Color(0.88f, 0.86f, 0.81f);
+            for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                float u = x / (float)W, v = y / (float)H;
+                float band = Band(Mathf.Repeat(v * 9f, 1f), 0.5f, 0.12f);                  // 帶狀縫
+                float seam = Band(Mathf.Repeat(u * 4f + 0.125f, 1f), 0.5f, 0.02f);         // 四瓣谷線
+                float k = 1f - 0.35f * band - 0.15f * seam;
+                var c = cloth * k;
+                c.a = 1f;
+                t.SetPixel(x, y, c);
+            }
+            t.Apply();
+            System.IO.File.WriteAllBytes(texPath, t.EncodeToPNG());
+            Object.DestroyImmediate(t);
+            AssetDatabase.ImportAsset(texPath);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+        }
+
+        // HDRP Unlit 加法、貼圖顏色烘在裡面；亮度在執行期用 _UnlitColor 給
+        static Material AdditiveMaterial(string name, string texName, int size, System.Func<float, float, Color> pixel, bool doubleSided)
+        {
+            string texPath = TexDir + "/" + texName + ".png";
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                t.SetPixel(x, y, pixel((x + 0.5f) / size, (y + 0.5f) / size));
+            t.Apply();
+            System.IO.File.WriteAllBytes(texPath, t.EncodeToPNG());
+            Object.DestroyImmediate(t);
+            AssetDatabase.ImportAsset(texPath);
+            var ti = (TextureImporter)AssetImporter.GetAtPath(texPath);
+            ti.wrapMode = TextureWrapMode.Clamp;
+            ti.sRGBTexture = false;
+            ti.SaveAndReimport();
+            string path = MatDir + "/" + name + ".mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!m)
+            {
+                m = new Material(Shader.Find("HDRP/Unlit"));
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.SetTexture("_UnlitColorMap", AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+            m.SetColor("_UnlitColor", Color.black);
+            m.SetFloat("_SurfaceType", 1f);
+            m.SetFloat("_BlendMode", 1f);                 // Additive
+            m.SetFloat("_EnableFogOnTransparent", 1f);
+            m.SetFloat("_DoubleSidedEnable", doubleSided ? 1f : 0f);
             HDMaterial.ValidateMaterial(m);
             EditorUtility.SetDirty(m);
             return m;

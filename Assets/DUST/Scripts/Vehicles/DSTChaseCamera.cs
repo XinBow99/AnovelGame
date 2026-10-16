@@ -8,6 +8,8 @@ namespace DUST.Vehicles
 {
     // 追車攝影機；C 鍵（手把 Y）切換駕駛座視角。
     // 滑鼠（手把右搖桿）自由繞著車子看 / 駕駛座裡轉頭；放著不動一下子就自己轉回車子後方。
+    // 飛機（米格-25）照 GTA 的飛機鏡頭：跟著機頭的偏航 + 俯仰（不跟滾轉，地平線保持水平），
+    // 放開滑鼠 1.5 秒就轉回機尾後方；按住左鍵用滑鼠操縱時不轉視角。
     public class DSTChaseCamera : MonoBehaviour
     {
         public Transform target;          // 上車時由 DSTVehicleEntry 指定（皮卡、無人機共用這台鏡頭）
@@ -45,6 +47,7 @@ namespace DUST.Vehicles
         {
             _freeYaw = 0f; _freePitch = 0f; _lastLook = -99f;
             _snapFocus = true; _camDist = 0f;
+            _jetFor = null;
             if (!target) return;
             var t = target.transform;
             _yaw = t.eulerAngles.y;
@@ -80,6 +83,8 @@ namespace DUST.Vehicles
                 return;
             }
 
+            if (Jet()) { AircraftFollow(t); return; }
+
             // 倒車時不要把鏡頭甩到車頭
             float wantYaw = t.eulerAngles.y;
             _yaw = Mathf.LerpAngle(_yaw, wantYaw, 1f - Mathf.Exp(-rotationDamping * Time.deltaTime));
@@ -108,23 +113,66 @@ namespace DUST.Vehicles
         void UpdateFreeLook()
         {
             var look = DSTPlayerController.ReadLookInput(mouseSensitivity);
+            if (DSTJetController.MouseFlightActive) look = Vector2.zero;   // 滑鼠在開飛機，不是轉視角
+            bool air = Jet() && !cockpit;
             if (look.sqrMagnitude > 1e-4f)
             {
                 _freeYaw = Mathf.Repeat(_freeYaw + look.x + 180f, 360f) - 180f;
                 _freePitch = Mathf.Clamp(_freePitch - look.y, cockpit ? -60f : -25f, 60f);
                 _lastLook = Time.time;
             }
-            else if (Time.time - _lastLook > recenterDelay && Moving())
+            else if (Time.time - _lastLook > (air ? aircraftRecenterDelay : recenterDelay) && Moving())
             {
                 // SmoothDamp + 速度上限：慢慢加速、慢慢停，不會一下子甩回車後
-                _freeYaw = Mathf.SmoothDampAngle(_freeYaw, 0f, ref _yawVel, recenterTime * 0.5f, recenterMaxSpeed);
-                _freePitch = Mathf.SmoothDamp(_freePitch, 0f, ref _pitchVel, recenterTime * 0.5f, recenterMaxSpeed);
+                float maxSpeed = air ? recenterMaxSpeed * 2f : recenterMaxSpeed;
+                _freeYaw = Mathf.SmoothDampAngle(_freeYaw, 0f, ref _yawVel, recenterTime * 0.5f, maxSpeed);
+                _freePitch = Mathf.SmoothDamp(_freePitch, 0f, ref _pitchVel, recenterTime * 0.5f, maxSpeed);
                 return;
             }
             _yawVel = _pitchVel = 0f;
         }
 
         float _yawVel, _pitchVel;
+        DSTJetController _jet;
+        Transform _jetFor;
+        Quaternion _airRot;
+        float _chuteLift;                       // 減速傘張開時鏡頭升高（傘就在機尾後 7 m，不升高會擋住下半個畫面，實測）
+        public float aircraftDamping = 4f;      // 鏡頭跟上機頭方向的快慢（1/秒）
+        public float aircraftRecenterDelay = 1.5f;
+
+        DSTJetController Jet()
+        {
+            if (_jetFor != target) { _jetFor = target; _jet = target ? target.GetComponentInParent<DSTJetController>() : null; _airRot = target ? Level(target) : Quaternion.identity; }
+            return _jet;
+        }
+
+        // 機頭方向、地平線水平；接近垂直（翻筋斗）時改用機身的上方，鏡頭不會在頂點突然轉 180°
+        static Quaternion Level(Transform t)
+        {
+            var f = t.forward;
+            float vert = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.8f, 0.98f, Mathf.Abs(f.y)));
+            var up = Vector3.Slerp(Vector3.up, t.up, vert);
+            return Quaternion.LookRotation(f, up);
+        }
+
+        void AircraftFollow(Transform t)
+        {
+            _airRot = Quaternion.Slerp(_airRot, Level(t), 1f - Mathf.Exp(-aircraftDamping * Time.deltaTime));
+            var rot = Quaternion.AngleAxis(_freeYaw, Vector3.up) * _airRot * Quaternion.Euler(_freePitch, 0f, 0f);
+            var focus = t.position + Vector3.up * lookHeight;
+            _chuteLift = Mathf.Lerp(_chuteLift, _jet.ChuteDeployed ? 3.5f : 0f, 1f - Mathf.Exp(-1.5f * Time.deltaTime));
+            var offset = rot * new Vector3(0f, height - lookHeight + _chuteLift, -distance);
+            // 不要鑽到地底：從飛機往鏡頭打射線
+            var dir = offset.normalized;
+            float want = offset.magnitude;
+            if (Physics.SphereCast(focus, 0.25f, dir, out var hit, want, ~0, QueryTriggerInteraction.Ignore)
+                && !hit.transform.IsChildOf(t) && !hit.collider.attachedRigidbody)
+                want = Mathf.Max(1.0f, hit.distance - 0.2f);
+            _camDist = want < _camDist || _camDist <= 0f ? want : Mathf.Lerp(_camDist, want, 1f - Mathf.Exp(-2f * Time.deltaTime));
+            transform.position = focus + dir * _camDist;
+            // 看飛機前方一點：飛機在畫面中間偏下（GTA）
+            transform.rotation = Quaternion.LookRotation(focus + rot * Vector3.forward * 10f - transform.position, rot * Vector3.up);
+        }
         bool? _blurOn;
 
         void SetMotionBlur(bool on)

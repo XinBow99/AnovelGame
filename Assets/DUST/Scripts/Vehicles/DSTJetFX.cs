@@ -16,16 +16,23 @@ namespace DUST.Vehicles
     //   參考：玩家給的米格-25 起飛照（nationalinterest.org）—— 噴口裡面橘黃、中間藍紫色的火焰穩定器環、
     //   外面的火焰很短，後面一大片熱浪 / 淡煙。
     //   （第一版用 30000 nit 的加法錐，四層疊起來被 bloom 吹成整片白，玩家說後面看不到路）
+    // 第二次對照實拍（Wikimedia Commons「MiG-25 take offs」：MiG-25RB 起飛的正後方 / 側面 / 正面照，2026-10-15）：
+    //   - 噴口：後燃器時整個噴口都填滿光（不是中間一顆亮點）——外圈是燒紅的橘色內襯，裡面黃白斑駁，
+    //     疊著藍紫色的火焰穩定器（兩圈環 + 放射狀支架）。改成一張有顏色的噴口貼圖，蓋滿噴口內徑。
+    //   - 側面看得到一段半透明的橘色火焰，大約一個垂尾弦長（實機 ~5 m），原本 1.9（半尺寸）太短太淡。
+    //   - 正面照：進氣道下方主輪艙前兩盞著陸燈 + 前起落架上一盞滑行燈，放下起落架就亮。
+    //   - 落地：機尾兩片垂尾之間的傘艙拋出兩頂十字形減速傘（testpilot.ru：兩頂、共約 50 m²，左腹鰭探針觸地自動開傘）。
     // 跑道揚沙、落地胎煙、合成引擎聲同前。
     [RequireComponent(typeof(DSTJetController))]
     public class DSTJetFX : MonoBehaviour
     {
         public Material flameMaterial;            // HDRP Unlit 加法（亮度在執行期依曝光給）
+        public Material nozzleMaterial;           // 噴口面：有顏色的加法貼圖（橘色內襯、黃白火焰、藍紫火焰穩定器）
         public Material hazeMaterial;             // HDRP Unlit distortion only
         public Material dustMaterial;
-        public float plumeLength = 1.9f;          // 全後燃器火焰長度（m，半尺寸；實機約 4 m）
-        public float glowIntensity = 18f;         // 噴口光盤（_UnlitColor 數值，實測校正）
-        public float plumeIntensity = 14f;        // 火焰錐（20 剛好、80 爆白）
+        public float plumeLength = 2.6f;          // 全後燃器火焰長度（m，半尺寸；實機起飛側面照約 5 m）
+        public float glowIntensity = 2f;          // 噴口面（貼圖本身有顏色；4 以上中心吹白、看不到藍紫色火焰穩定器，實測）
+        public float plumeIntensity = 9f;         // 火焰錐，側面看的亮度（正後方只剩 10%）；4.5 在大太陽下側面幾乎看不到
         public float dustHeight = 6f;
 
         DSTJetController _jet;
@@ -38,7 +45,6 @@ namespace DUST.Vehicles
         float _spool;
 
         static readonly int UnlitColor = Shader.PropertyToID("_UnlitColor");
-        readonly Renderer[] _holderR = new Renderer[2];
         static readonly int DistortionScale = Shader.PropertyToID("_DistortionScale");
 
         void Awake()
@@ -56,28 +62,31 @@ namespace DUST.Vehicles
             _smoke = BuildParticles("TyreSmoke", 400, true);
             BuildAudio();
             BuildSupersonic();
+            BuildChute();
+            BuildLamps();
         }
 
         void OnDestroy()
         {
             if (_jet) { _jet.TouchDown -= OnTouchDown; _jet.SoundBarrier -= OnSoundBarrier; }
+            if (_chuteRoot && _chuteRoot.parent != transform) Destroy(_chuteRoot.gameObject);   // 拋掉、還躺在地上的傘
         }
 
         // ------------------------------------------------------------------ 後燃器
         void BuildFlames()
         {
-            var cone = ConeMesh(24, 0.05f);
-            var disc = DiscMesh(32);
+            var cone = ConeMesh(24, 0.55f);      // 火焰：差不多是一根柱子、尾端稍微收（實拍側面）
+            var coreCone = ConeMesh(16, 0.05f);  // 內焰：尖的
+            var disc = FaceDiscMesh(32);
             var haze = ConeMesh(16, 3.2f);       // 熱浪往後越散越開
             for (int i = 0; i < 2; i++)
             {
                 if (!_nozzles[i]) continue;
                 if (flameMaterial)
                 {
-                    _glowR[i] = Part("NozzleGlow_" + i, disc, flameMaterial, _nozzles[i], -0.12f, out _);
-                    _holderR[i] = Part("FlameHolder_" + i, disc, flameMaterial, _nozzles[i], -0.24f, out _);
+                    _glowR[i] = Part("NozzleGlow_" + i, disc, nozzleMaterial ? nozzleMaterial : flameMaterial, _nozzles[i], -0.12f, out _);
                     _plumeR[i] = Part("Plume_" + i, cone, flameMaterial, _nozzles[i], 0f, out _plume[i]);
-                    _coreR[i] = Part("PlumeCore_" + i, cone, flameMaterial, _nozzles[i], 0f, out _core[i]);
+                    _coreR[i] = Part("PlumeCore_" + i, coreCone, flameMaterial, _nozzles[i], 0f, out _core[i]);
                 }
                 if (hazeMaterial) _hazeR[i] = Part("Haze_" + i, haze, hazeMaterial, _nozzles[i], 0.1f, out _haze[i]);
             }
@@ -132,19 +141,19 @@ namespace DUST.Vehicles
             return m;
         }
 
-        // 單位圓盤，面朝 +z（往機尾看得到）；u = 半徑比例（貼圖中心最亮）
-        static Mesh DiscMesh(int seg)
+        // 單位圓盤，面朝 +z；平面 UV（貼圖整張貼在圓上：中心 0.5,0.5、邊緣半徑 0.5）
+        static Mesh FaceDiscMesh(int seg)
         {
             var v = new System.Collections.Generic.List<Vector3> { Vector3.zero };
-            var uv = new System.Collections.Generic.List<Vector2> { new Vector2(0f, 0.5f) };
+            var uv = new System.Collections.Generic.List<Vector2> { new Vector2(0.5f, 0.5f) };
             var tri = new System.Collections.Generic.List<int>();
             for (int s = 0; s <= seg; s++)
             {
                 float a = s / (float)seg * Mathf.PI * 2f;
                 v.Add(new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f));
-                uv.Add(new Vector2(0.55f, 0.5f));
+                uv.Add(new Vector2(0.5f + 0.5f * Mathf.Cos(a), 0.5f + 0.5f * Mathf.Sin(a)));
             }
-            for (int s = 1; s <= seg; s++) tri.AddRange(new[] { 0, s + 1, s });
+            for (int s = 1; s <= seg; s++) tri.AddRange(new[] { 0, s, s + 1 });   // 從 +z 看是正面（單面材質才看得到）
             var m = new Mesh { name = "NozzleGlow" };
             m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
             m.RecalculateNormals();
@@ -160,30 +169,28 @@ namespace DUST.Vehicles
             for (int i = 0; i < 2; i++)
             {
                 if (!_nozzles[i]) continue;
-                // 噴口光盤：慢車暗紅 → 軍用推力橘 → 後燃器黃白
+                // 噴口面：蓋滿噴口內徑（噴口外徑 0.29、內襯 ~0.25，半尺寸）。顏色在貼圖裡，這裡只給亮度：
+                // 慢車 / 軍用推力只有暗紅的餘光，後燃器整片亮起來
                 if (_glowR[i])
                 {
-                    _glowR[i].transform.localScale = Vector3.one * 0.24f;
-                    var c = ab > 0f ? Color.Lerp(new Color(1f, 0.42f, 0.12f), new Color(1f, 0.75f, 0.4f), ab) * glowIntensity * Mathf.Lerp(0.6f, 1f, ab)
+                    _glowR[i].transform.localScale = Vector3.one * 0.25f;
+                    var c = ab > 0f ? Color.Lerp(new Color(1f, 0.55f, 0.35f), Color.white, ab) * glowIntensity * Mathf.Lerp(0.5f, 1f, ab)
                                     : new Color(0.6f, 0.12f, 0.03f) * (0.05f + 0.25f * thr);
                     Set(_glowR[i], c * flicker, on);
-                }
-                if (_holderR[i])
-                {
-                    _holderR[i].transform.localScale = Vector3.one * 0.15f;
-                    Set(_holderR[i], new Color(0.55f, 0.45f, 1f) * glowIntensity * 0.6f * ab * flicker, ab > 0.01f);
                 }
                 // 火焰：只有後燃器才有，短而淡
                 float len = plumeLength * Mathf.SmoothStep(0f, 1f, ab) * (0.93f + 0.07f * flicker);
                 if (_plumeR[i])
                 {
                     _plume[i].localScale = new Vector3(0.22f, 0.22f, Mathf.Max(0.01f, len));
-                    Set(_plumeR[i], new Color(1f, 0.45f, 0.15f) * plumeIntensity * ab * flicker, ab > 0.01f);
+                    _plumeCol[i] = new Color(1f, 0.45f, 0.15f) * plumeIntensity * ab * flicker;
+                    Set(_plumeR[i], _plumeCol[i], ab > 0.01f);
                 }
                 if (_coreR[i])
                 {
-                    _core[i].localScale = new Vector3(0.13f, 0.13f, Mathf.Max(0.01f, len * 0.35f));
-                    Set(_coreR[i], new Color(1f, 0.8f, 0.55f) * plumeIntensity * 1.4f * ab * flicker, ab > 0.01f);
+                    _core[i].localScale = new Vector3(0.13f, 0.13f, Mathf.Max(0.01f, len * 0.3f));
+                    _coreCol[i] = new Color(1f, 0.8f, 0.55f) * plumeIntensity * 1.4f * ab * flicker;
+                    Set(_coreR[i], _coreCol[i], ab > 0.01f);
                 }
                 // 熱浪：慢慢轉 + 微微抖，扭曲的圖案就會一直變
                 if (_hazeR[i])
@@ -197,6 +204,37 @@ namespace DUST.Vehicles
                     _hazeR[i].enabled = on;
                 }
             }
+        }
+
+        // 火焰錐從正後方（順著噴流看進去）幾乎透明、看得到噴口面；從側面看才是一段橘色火焰（實拍正後方 / 側面照）。
+        // 每台攝影機渲染前照它的視角調亮度，所以追車鏡頭、旁觀者、截圖各看各的
+        readonly Color[] _plumeCol = new Color[2], _coreCol = new Color[2];
+
+        void OnEnable() { RenderPipelineManager.beginCameraRendering += OnBeginCamera; }
+        void OnDisable() { RenderPipelineManager.beginCameraRendering -= OnBeginCamera; }
+
+        void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
+        {
+            if (!_jet) return;
+            Vector3 axis = -transform.forward;
+            for (int i = 0; i < 2; i++)
+            {
+                if (!_nozzles[i]) continue;
+                Vector3 toCam = (cam.transform.position - _nozzles[i].position).normalized;
+                float cos = Vector3.Dot(axis, toCam);
+                float sin = Mathf.Sqrt(Mathf.Max(0f, 1f - cos * cos));
+                float k = Mathf.Lerp(0.05f, 1f, sin * sin * sin);     // sin³θ：正後方 / 斜後方 15° 都幾乎透明（sin² 在 15° 還是一片橘，實測）、側面 1
+                if (_plumeR[i] && _plumeR[i].enabled) SetColor(_plumeR[i], _plumeCol[i] * k);
+                if (_coreR[i] && _coreR[i].enabled) SetColor(_coreR[i], _coreCol[i] * k);
+            }
+        }
+
+        void SetColor(Renderer r, Color c)
+        {
+            r.GetPropertyBlock(_mpb);
+            c.a = 1f;
+            _mpb.SetColor(UnlitColor, c);
+            r.SetPropertyBlock(_mpb);
         }
 
         void Set(Renderer r, Color c, bool visible)
@@ -577,12 +615,255 @@ namespace DUST.Vehicles
             return v.sqrMagnitude > 1f ? v.normalized : transform.forward;
         }
 
+        // ------------------------------------------------------------------ 減速傘
+        // 兩頂十字形帶狀傘：充氣後是四瓣的圓頂（Commons 上 MiG-29 落地開傘照：圓頂、一圈圈帶狀縫、很多條傘繩收到一個匯流點），
+        // 傘口直徑約 2.8 m、深 1.5 m（半尺寸；實機一頂 ~25 m²），傘艙到傘口約 7 m，一左一右、一前一後錯開。
+        // 開傘：傘包拋出 → 傘繩拉直（0.35 s）→ 充氣張開、稍微過衝（0.5 s）；之後左右擺動、一鼓一鼓。
+        // 拋傘：脫離飛機，往後飄、往下掉、塌掉，躺在跑道上 20 秒後消失。
+        public Material chuteMaterial;            // HDRP Lit 雙面，米白尼龍
+        static readonly Vector3 ChuteMount = new Vector3(0f, 1.55f, -5.6f);   // 兩片垂尾之間、噴口上方的傘艙
+        Transform _chuteRoot;
+        readonly Transform[] _canopy = new Transform[2];
+        readonly LineRenderer[] _risers = new LineRenderer[2];
+        float _chuteT = -1f;                      // 開傘後秒數，-1 = 收著
+        bool _chuteFree;                          // 拋掉了（不跟飛機）
+        Vector3 _chuteVel;
+        float _chuteFreeT;
+        const float CanopyR = 1.4f, CanopyDepth = 1.5f;
+        const int CanopySeg = 24, CanopyLines = 12;
+        static readonly Vector3[] CanopyRest = { new Vector3(-1.5f, 0.35f, 7.0f), new Vector3(1.6f, 0.15f, 7.8f) };
+
+        void BuildChute()
+        {
+            if (!chuteMaterial) return;
+            _chuteRoot = new GameObject("DragChute").transform;
+            _chuteRoot.SetParent(transform, false);
+            _chuteRoot.localPosition = ChuteMount;
+            var mesh = CanopyMesh(CanopySeg, 8);
+            for (int i = 0; i < 2; i++)
+            {
+                var go = new GameObject("Canopy_" + i);
+                go.transform.SetParent(_chuteRoot, false);
+                go.transform.localPosition = CanopyRest[i];
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var r = go.AddComponent<MeshRenderer>();
+                r.sharedMaterial = chuteMaterial;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                _canopy[i] = go.transform;
+                var lr = new GameObject("Risers_" + i).AddComponent<LineRenderer>();
+                lr.transform.SetParent(_chuteRoot, false);
+                lr.sharedMaterial = chuteMaterial;
+                lr.useWorldSpace = true;
+                lr.widthMultiplier = 0.018f;
+                lr.positionCount = 2 + CanopyLines * 2;
+                lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                lr.numCapVertices = 0;
+                _risers[i] = lr;
+            }
+            _chuteRoot.gameObject.SetActive(false);
+        }
+
+        // 傘口半徑：四瓣（十字形傘的四條臂充氣後鼓成四瓣）
+        static float LobeR(float phi) => CanopyR * (1f + 0.1f * Mathf.Cos(4f * phi));
+
+        // 傘衣：沿傘軸 s = 0（傘口，z = 0）→ 1（傘頂，z = CanopyDepth），繞一圈 phi。傘口朝 −z（朝飛機）。
+        // 傘口收一點（傘繩拉著）、中段最胖、傘頂圓；uv.y = s（貼圖裡有一圈圈帶狀縫）
+        static Mesh CanopyMesh(int seg, int rings)
+        {
+            var v = new System.Collections.Generic.List<Vector3>();
+            var uv = new System.Collections.Generic.List<Vector2>();
+            var tri = new System.Collections.Generic.List<int>();
+            for (int r = 0; r <= rings; r++)
+            {
+                float s = r / (float)rings;
+                float z = CanopyDepth * Mathf.Sin(s * Mathf.PI * 0.5f);
+                // Max(0)：float 的 cos(π/2) 是 −4e-8，Pow 負數 = NaN → 整個網格邊界 NaN、被剔除看不到（實測）
+                float shape = Mathf.Pow(Mathf.Max(0f, Mathf.Cos(s * Mathf.PI * 0.5f)), 0.6f) * Mathf.Lerp(0.85f, 1f, Mathf.Clamp01(s / 0.2f));
+                for (int k = 0; k <= seg; k++)
+                {
+                    float phi = k / (float)seg * Mathf.PI * 2f;
+                    float rad = LobeR(phi) * shape;
+                    v.Add(new Vector3(Mathf.Cos(phi) * rad, Mathf.Sin(phi) * rad, z));
+                    uv.Add(new Vector2(k / (float)seg, s));
+                }
+            }
+            for (int r = 0; r < rings; r++)
+            for (int k = 0; k < seg; k++)
+            {
+                int a = r * (seg + 1) + k, b = a + seg + 1;
+                tri.AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
+            }
+            var m = new Mesh { name = "ChuteCanopy" };
+            m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        // 傘口上的傘繩接點（傘本地座標）
+        static Vector3 SkirtPoint(int k)
+        {
+            float phi = k / (float)CanopyLines * Mathf.PI * 2f;
+            float rad = LobeR(phi) * 0.85f;
+            return new Vector3(Mathf.Cos(phi) * rad, Mathf.Sin(phi) * rad, 0f);
+        }
+
+        void UpdateChute(float dt)
+        {
+            if (!_chuteRoot) return;
+            bool want = _jet.ChuteDeployed && !_jet.Hidden;
+            if (want && (_chuteT < 0f || _chuteFree))
+            {
+                // 開傘（上一頂還躺在地上就直接收回來重用）
+                _chuteT = 0f; _chuteFree = false;
+                _chuteRoot.SetParent(transform, false);
+                _chuteRoot.localPosition = ChuteMount;
+                _chuteRoot.gameObject.SetActive(true);
+            }
+            else if (!want && _chuteT >= 0f && !_chuteFree)
+            {
+                if (_jet.Hidden) { _chuteRoot.gameObject.SetActive(false); _chuteT = -1f; return; }
+                // 拋傘
+                _chuteFree = true; _chuteFreeT = 0f;
+                _chuteVel = VelocityDir() * _jet.AirSpeed * 0.85f;
+                _chuteRoot.SetParent(null, true);
+            }
+            if (_chuteT < 0f) return;
+            _chuteT += dt;
+
+            Vector3 mount = _chuteFree ? _chuteRoot.position : transform.TransformPoint(ChuteMount);
+            if (!_chuteFree)
+            {
+                // 傘拖在飛機後面、順著氣流；左右上下慢慢擺
+                Vector3 back = -VelocityDir();
+                back = Vector3.ProjectOnPlane(back, Vector3.up).sqrMagnitude > 0.01f ? back : -transform.forward;
+                var rot = Quaternion.LookRotation(back, Vector3.up)
+                          * Quaternion.Euler((Mathf.PerlinNoise(Time.time * 0.7f, 3f) - 0.5f) * 7f, (Mathf.PerlinNoise(Time.time * 0.6f, 7f) - 0.5f) * 10f, 0f);
+                _chuteRoot.SetPositionAndRotation(mount, rot);
+            }
+            else
+            {
+                // 脫離：被風拖慢、往下掉，掉到地面就停
+                _chuteFreeT += dt;
+                _chuteVel *= Mathf.Exp(-1.6f * dt);
+                _chuteVel += Vector3.down * 2.5f * dt;
+                Vector3 pos = _chuteRoot.position + _chuteVel * dt;
+                float ground = float.NegativeInfinity;
+                if (Physics.Raycast(pos + Vector3.up * 3f, Vector3.down, out var hit, 10f, ~0, QueryTriggerInteraction.Ignore) && !hit.transform.IsChildOf(transform))
+                    ground = hit.point.y + 0.05f;
+                if (pos.y < ground) { pos.y = ground; _chuteVel = Vector3.zero; }
+                _chuteRoot.position = pos;
+                // 傘衣往下倒、躺平
+                var flat = Quaternion.LookRotation(Vector3.ProjectOnPlane(_chuteRoot.forward, Vector3.up).normalized, Vector3.up);
+                _chuteRoot.rotation = Quaternion.Slerp(_chuteRoot.rotation, flat, dt * 1.5f);
+                if (_chuteFreeT > 20f) { _chuteRoot.gameObject.SetActive(false); _chuteT = -1f; _chuteFree = false; _chuteRoot.SetParent(transform, false); return; }
+            }
+
+            // 開傘動畫：傘繩先拉直，再充氣（過衝一點），之後一鼓一鼓
+            float extend = Mathf.SmoothStep(0.25f, 1f, Mathf.Clamp01(_chuteT / 0.35f));
+            float inflate = Mathf.Clamp01((_chuteT - 0.25f) / 0.5f);
+            float over = 1f + 0.12f * Mathf.Sin(inflate * Mathf.PI) * (1f - inflate * 0.5f);
+            float collapse = _chuteFree ? Mathf.Clamp01(_chuteFreeT / 1.8f) : 0f;
+            for (int i = 0; i < 2; i++)
+            {
+                if (!_canopy[i]) continue;
+                float breathe = 1f + 0.04f * Mathf.Sin(Time.time * (11f + i * 2.3f) + i);
+                float sxy = Mathf.Lerp(0.12f, 1f, Mathf.SmoothStep(0f, 1f, inflate)) * over * breathe * Mathf.Lerp(1f, 0.55f, collapse);
+                float sz = Mathf.Lerp(2.2f, 1f, inflate) * Mathf.Lerp(1f, 0.4f, collapse);
+                // 塌掉：壓扁貼地（傘本地 y 大約是垂直方向）
+                _canopy[i].localScale = new Vector3(sxy, sxy * Mathf.Lerp(1f, 0.12f, collapse), sz);
+                Vector3 rest = CanopyRest[i];
+                _canopy[i].localPosition = new Vector3(rest.x * Mathf.Lerp(0.2f, 1f, inflate), Mathf.Lerp(rest.y, 0.15f, collapse), rest.z * extend * Mathf.Lerp(1f, 0.85f, collapse))
+                                           + new Vector3(Mathf.PerlinNoise(Time.time * 1.3f, i * 5f) - 0.5f, Mathf.PerlinNoise(Time.time * 1.1f, i * 5f + 2f) - 0.5f, 0f) * 0.35f * (1f - collapse);
+                _canopy[i].localRotation = Quaternion.LookRotation(_canopy[i].localPosition.normalized, Vector3.up);
+                // 傘繩：傘艙 → 匯流點（傘口前約 4 m）→ 傘口一圈 12 個接點，來回畫
+                var lr = _risers[i];
+                if (!lr) continue;
+                Vector3 conf = _chuteRoot.TransformPoint(_canopy[i].localPosition * 0.42f);
+                lr.SetPosition(0, mount);
+                lr.SetPosition(1, conf);
+                for (int k = 0; k < CanopyLines; k++)
+                {
+                    lr.SetPosition(2 + k * 2, _canopy[i].TransformPoint(SkirtPoint(k)));
+                    lr.SetPosition(3 + k * 2, conf);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------ 著陸燈 / 滑行燈
+        // 實拍正面照：兩盞著陸燈在進氣道下方、主輪艙前（跟著主起落架收放），一盞滑行燈在前起落架上。
+        // 起落架放下、引擎開著就亮；燈本體用一小片加法光點（白天也看得到亮點），晚上照得到地面。
+        public Material lampMaterial;             // HDRP Unlit 加法，圓形柔光點
+        public float lampGlow = 30f;
+        Light[] _lamps;
+        Renderer[] _lampGlowR;
+
+        void BuildLamps()
+        {
+            // (掛在哪個零件, 本地位置（機體座標，半尺寸）, 往下打幾度, 光錐角, 燭光)
+            var defs = new (string part, Vector3 pos, float down, float angle, float cd)[]
+            {
+                ("MiG25_MainGear_L", new Vector3(-0.55f, 0.62f, -0.72f), 4f, 22f, 150000f),
+                ("MiG25_MainGear_R", new Vector3(0.55f, 0.62f, -0.72f), 4f, 22f, 150000f),
+                ("MiG25_NoseGear", new Vector3(0f, 0.52f, 2.62f), 8f, 40f, 40000f),
+            };
+            _lamps = new Light[defs.Length];
+            _lampGlowR = new Renderer[defs.Length];
+            Mesh disc = lampMaterial ? FaceDiscMesh(16) : null;
+            for (int i = 0; i < defs.Length; i++)
+            {
+                Transform parent = transform;
+                foreach (var t in GetComponentsInChildren<Transform>(true)) if (t.name == defs[i].part) { parent = t; break; }
+                var go = new GameObject("Lamp_" + defs[i].part);
+                go.transform.SetPositionAndRotation(transform.TransformPoint(defs[i].pos), transform.rotation * Quaternion.Euler(defs[i].down, 0f, 0f));
+                go.transform.SetParent(parent, true);
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Spot;
+                l.spotAngle = defs[i].angle;
+                l.innerSpotAngle = defs[i].angle * 0.5f;
+                l.color = new Color(1f, 0.93f, 0.8f);
+                l.lightUnit = UnityEngine.Rendering.LightUnit.Candela;
+                l.intensity = defs[i].cd;
+                l.range = defs[i].angle < 30f ? 250f : 80f;
+                l.shadows = LightShadows.None;
+                l.enabled = false;
+                _lamps[i] = l;
+                if (disc)
+                {
+                    var g = new GameObject("Glow");
+                    g.transform.SetParent(go.transform, false);
+                    g.transform.localPosition = Vector3.forward * 0.03f;
+                    g.transform.localScale = Vector3.one * (defs[i].cd > 100000f ? 0.09f : 0.06f);
+                    g.AddComponent<MeshFilter>().sharedMesh = disc;
+                    var r = g.AddComponent<MeshRenderer>();
+                    r.sharedMaterial = lampMaterial;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                    r.enabled = false;
+                    _lampGlowR[i] = r;
+                }
+            }
+        }
+
+        void UpdateLamps()
+        {
+            if (_lamps == null) return;
+            bool on = _jet.EngineOn && !_jet.Hidden && _jet.GearDown01 > 0.97f;
+            for (int i = 0; i < _lamps.Length; i++)
+            {
+                if (_lamps[i]) _lamps[i].enabled = on;
+                if (_lampGlowR[i]) Set(_lampGlowR[i], new Color(1f, 0.95f, 0.85f) * lampGlow, on);
+            }
+        }
+
         void LateUpdate()
         {
             UpdateFlames();
             UpdateDust();
             UpdateAudio(Time.deltaTime);
             UpdateSupersonic(Time.deltaTime);
+            UpdateChute(Time.deltaTime);
+            UpdateLamps();
         }
     }
 }

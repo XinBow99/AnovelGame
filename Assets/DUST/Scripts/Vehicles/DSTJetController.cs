@@ -19,9 +19,12 @@ namespace DUST.Vehicles
     // 5 km 高度從 M 1 加速到 M 2.8 約 90 秒（第一版照實機算要 7 分鐘以上，太慢）。
     // 音速：半尺寸世界速度 ×√0.5 → 海平面 240 m/s、高空 209 m/s。
     //
-    // 操作：W/S 油門（停在哪就是哪，85% 以上是後燃器）、A/D 滾轉、↑/↓ 俯仰（↓ = 拉桿抬頭）、
-    // Q/E 方向舵（地面 = 前輪轉向）、Space 煞車、G 起落架、C 視角。
-    // 手把：左搖桿 俯仰 / 滾轉、RT/LT 油門加 / 減、LB/RB 方向舵、A 煞車、X 起落架。
+    // 操作照 GTA V（PC 預設鍵位，GTABoom 鍵位表）：W 加油門（按住才有推力，放開回慢車）、S 減速（空中減速板 / 地面煞車）、
+    // A/D 方向舵（地面 = 前輪轉向）、數字鍵 8/5 俯仰（8 = 推桿低頭、5 = 拉桿抬頭；也可以用 ↑/↓）、
+    // 數字鍵 4/6 滾轉（也可以用 ←/→）、按住滑鼠左鍵 = 滑鼠操縱（左右滾轉、前後俯仰）、Space 煞車、G 起落架、C 視角。
+    // 手把：RT 油門、LT 減速、左搖桿 俯仰 / 滾轉、LB/RB 方向舵、A 煞車、X 起落架。
+    // 手感照 GTA 的戰鬥機（玩家要求，2026-10-15）：轉得快、「指哪飛哪」（速度方向一直被拉向機頭，轉彎幾乎不掉速）、
+    // 放開桿子保持姿態、不自動改平；低速才會失速掉頭。
     //
     // 活動零件（Blender 已經把原點放在樞紐、一律繞本地 X 軸轉；正負號見 DSTMiG25Setup）。
     // 在遺跡二（沒有跑道）整架藏起來不動，只在隨機世界出現（DSTWorld.Relocate 停到跑道頭）。
@@ -52,13 +55,17 @@ namespace DUST.Vehicles
         public float soundSpeedSea = 240f;
         public float soundSpeedHigh = 209f;     // 2.7 km 以上
 
-        [Header("Handling (MiG-25: fast, heavy, wide turns)")]
-        public float maxPitchRate = 16f;        // 度/秒
-        public float maxRollRate = 70f;
-        public float maxYawRate = 6f;
-        public float maxG = 5f;
+        [Header("Handling (GTA-style arcade: snappy, flies where the nose points)")]
+        public float maxPitchRate = 45f;        // 度/秒（原本照實機 16，玩家要 GTA 手感）
+        public float maxRollRate = 150f;
+        public float maxYawRate = 25f;
+        public float maxG = 16f;                // 高速時俯仰角速度上限 = maxG·g / v（200 m/s 約 45°/s：筋斗 ~8 秒；M 2.8 約 15°/s）
+        public float arcadeGrip = 2.2f;         // 速度方向往機頭方向轉的速率（1/秒）：越大越「指哪飛哪」
+        public float airbrakeDrag = 1.2f;       // S 減速：額外阻力（× 零升阻力）
+        public float throttleUpRate = 1.6f;     // W 按住：油門 0 → 1 約 0.6 秒
+        public float throttleDownRate = 0.8f;   // 放開：回到慢車
         public float controlFullSpeed = 55f;    // 這個速度以上舵面完全有效
-        public float rateGain = 3f;
+        public float rateGain = 6f;             // 角速度跟上指令的快慢（GTA：幾乎立刻）
         public float alphaLimitUp = 14f;        // 攻角限制器：拉桿超過這個攻角就不再加（防止失速尾旋）
         public float alphaLimitDown = -8f;
 
@@ -73,6 +80,13 @@ namespace DUST.Vehicles
         public float noseSteerDeg = 35f;
         public float gearTime = 5f;             // 收 / 放起落架秒數
 
+        [Header("Drag chute")]
+        // 實機：機尾兩片垂尾之間的傘艙，兩頂十字形減速傘（testpilot.ru：兩頂、共約 50 m²），
+        // 主輪落地時左腹鰭的探針碰到跑道就自動拋出；滑跑慢下來後拋掉
+        public float chuteDecel = 3.2f;         // 70 m/s 時的減速度（m/s²），跟速度平方成正比
+        public float chuteDeploySpeed = 30f;    // 落地時要比這個快才會開傘
+        public float chuteJettisonSpeed = 12f;  // 慢到這裡拋傘
+
         // ------------------------------------------------------------------ IDSTDrivable
         public bool PlayerControlled
         {
@@ -80,13 +94,13 @@ namespace DUST.Vehicles
             set
             {
                 _controlled = value;
-                if (!value) { _pitchIn = _rollIn = _yawIn = 0f; _throttle = 0f; _brake = 1f; }
+                if (!value) { _pitchIn = _rollIn = _yawIn = 0f; _throttle = 0f; _brake = 1f; _airbrake = 0f; _mouseStick = Vector2.zero; MouseFlightActive = false; }
                 else _brake = 0f;
             }
         }
 
         public float SpeedKmh => !_rb ? 0f : _rb.isKinematic ? _syncedSpeedKmh : Vector3.Dot(_rb.linearVelocity, transform.forward) * 3.6f;
-        public string ControlsHint => "[F] 下機  [W/S] 油門  [A/D] 滾轉  [↑/↓] 俯仰  [Q/E] 方向舵  [Space] 煞車  [G] 起落架  [C] 視角";
+        public string ControlsHint => "[F] 下機  [W] 油門  [S] 減速  [A/D] 方向舵  [數字鍵8/5 或 ↑/↓] 俯仰  [數字鍵4/6 或 ←/→] 滾轉  [按住滑鼠左鍵] 滑鼠操縱  [G] 起落架  [C] 視角";
         public string EnterHint => "[F] 登機";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)
@@ -113,6 +127,7 @@ namespace DUST.Vehicles
         public float GForce { get; private set; }
         public bool Hidden => _hidden;
         public event System.Action<float> TouchDown;   // 參數 = 落地垂直速度 m/s
+        public bool ChuteDeployed => _chute;            // 減速傘張開中（網路同步，特效用）
         // 除錯：各輪壓縮量 / 靜載重
         public string DebugWheels
         {
@@ -131,7 +146,12 @@ namespace DUST.Vehicles
         Rigidbody _rb;
         bool _controlled;
         float _throttle, _pitchIn, _rollIn, _yawIn, _brake = 1f;
+        float _airbrake;                                // S 按住（空中減速）
+        Vector2 _mouseStick;                            // 滑鼠操縱的虛擬搖桿（-1..1，放開慢慢回中）
+        /// <summary>這一幀駕駛正在用滑鼠操縱（按住左鍵）——追車鏡頭這時不吃滑鼠轉視角。</summary>
+        public static bool MouseFlightActive { get; private set; }
         bool _gearCmdDown = true;
+        bool _chute, _chuteUsed;                        // 這次落地已經用過傘了（再起飛才重置）
         float _gear01 = 1f;
         bool _hidden;
         Vector3 _lastPosition;
@@ -265,27 +285,39 @@ namespace DUST.Vehicles
 
         void ReadPlayerInput(float dt)
         {
-            float thr = 0f, p = 0f, r = 0f, y = 0f, brake = 0f;
-            bool gear = false;
+            float thrUp = 0f, slow = 0f, p = 0f, r = 0f, y = 0f, brake = 0f;
+            bool gear = false, mouseFly = false;
 #if ENABLE_INPUT_SYSTEM
             var kb = DUST.UI.DSTChat.Typing ? null : Keyboard.current;   // 聊天打字中不吃鍵盤
             if (kb != null)
             {
-                if (kb.wKey.isPressed) thr += 1f;
-                if (kb.sKey.isPressed) thr -= 1f;
-                if (kb.dKey.isPressed) r += 1f;
-                if (kb.aKey.isPressed) r -= 1f;
-                if (kb.downArrowKey.isPressed) p += 1f;      // 拉桿 = 抬頭
-                if (kb.upArrowKey.isPressed) p -= 1f;
-                if (kb.eKey.isPressed) y += 1f;
-                if (kb.qKey.isPressed) y -= 1f;
+                if (kb.wKey.isPressed) thrUp = 1f;
+                if (kb.sKey.isPressed) slow = 1f;
+                if (kb.dKey.isPressed) y += 1f;
+                if (kb.aKey.isPressed) y -= 1f;
+                if (kb.numpad5Key.isPressed || kb.downArrowKey.isPressed) p += 1f;   // 拉桿 = 抬頭
+                if (kb.numpad8Key.isPressed || kb.upArrowKey.isPressed) p -= 1f;
+                if (kb.numpad6Key.isPressed || kb.rightArrowKey.isPressed) r += 1f;
+                if (kb.numpad4Key.isPressed || kb.leftArrowKey.isPressed) r -= 1f;
                 if (kb.spaceKey.isPressed) brake = 1f;
                 gear |= kb.gKey.wasPressedThisFrame;
             }
+            // 滑鼠操縱（GTA：按住左鍵）：滑鼠移動推虛擬搖桿，放開慢慢回中；往前推滑鼠 = 低頭
+            var mouse = Mouse.current;
+            if (mouse != null && Cursor.lockState == CursorLockMode.Locked && mouse.leftButton.isPressed && !DUST.UI.DSTChat.ConsumesKeys)
+            {
+                mouseFly = true;
+                var d = mouse.delta.ReadValue();
+                _mouseStick = new Vector2(Mathf.Clamp(_mouseStick.x + d.x * 0.012f, -1f, 1f), Mathf.Clamp(_mouseStick.y + d.y * 0.012f, -1f, 1f));
+            }
+            _mouseStick *= Mathf.Exp(-(mouseFly ? 2.5f : 12f) * dt);
+            r += _mouseStick.x;
+            p -= _mouseStick.y;
             var gp = Gamepad.current;
             if (gp != null)
             {
-                thr += gp.rightTrigger.ReadValue() - gp.leftTrigger.ReadValue();
+                thrUp = Mathf.Max(thrUp, gp.rightTrigger.ReadValue());
+                slow = Mathf.Max(slow, gp.leftTrigger.ReadValue());
                 r += gp.leftStick.x.ReadValue();
                 p += -gp.leftStick.y.ReadValue();                // 搖桿往後拉 = 抬頭
                 if (gp.rightShoulder.isPressed) y += 1f;
@@ -294,17 +326,31 @@ namespace DUST.Vehicles
                 gear |= gp.buttonWest.wasPressedThisFrame;
             }
 #else
-            thr = Input.GetAxis("Vertical");
-            r = Input.GetAxis("Horizontal");
+            thrUp = Mathf.Max(0f, Input.GetAxis("Vertical"));
+            slow = Mathf.Max(0f, -Input.GetAxis("Vertical"));
+            y = Input.GetAxis("Horizontal");
             brake = Input.GetKey(KeyCode.Space) ? 1f : 0f;
             gear = Input.GetKeyDown(KeyCode.G);
 #endif
-            _throttle = Mathf.Clamp01(_throttle + Mathf.Clamp(thr, -1f, 1f) * throttleRate * dt);
-            _pitchIn = Mathf.Clamp(p, -1f, 1f);
-            _rollIn = Mathf.Clamp(r, -1f, 1f);
-            _yawIn = Mathf.Clamp(y, -1f, 1f);
-            _brake = brake;
-            if (gear) _gearCmdDown = !_gearCmdDown || Grounded;    // 機輪壓著地不能收
+            MouseFlightActive = mouseFly;
+            ApplyPilotInput(thrUp, slow, p, r, y, brake, gear, dt);
+        }
+
+        /// <summary>
+        /// 駕駛輸入（已經從鍵盤 / 手把 / 滑鼠讀好）→ 油門、舵面、煞車。測試也直接呼叫這個（編輯器裡注入按鍵到不了遊戲）。
+        /// thrUp = W / RT（0..1）、slow = S / LT（0..1）、pitch 正 = 抬頭、roll 正 = 右滾、yaw 正 = 右偏。
+        /// </summary>
+        public void ApplyPilotInput(float thrUp, float slow, float pitch, float roll, float yaw, float brake, bool gearToggle, float dt)
+        {
+            // GTA 式油門：按住 W 推上去（扳機按多深就推到多少），放開回慢車；S 收油門 + 減速
+            float target = slow > 0.01f ? 0f : thrUp;
+            _throttle = Mathf.MoveTowards(_throttle, target, (target > _throttle ? throttleUpRate : throttleDownRate * (1f + 2f * slow)) * dt);
+            _airbrake = Grounded ? 0f : slow;
+            _pitchIn = Mathf.Clamp(pitch, -1f, 1f);
+            _rollIn = Mathf.Clamp(roll, -1f, 1f);
+            _yawIn = Mathf.Clamp(yaw, -1f, 1f);
+            _brake = Mathf.Max(brake, Grounded ? slow : 0f);    // 地面：S 也是煞車
+            if (gearToggle) _gearCmdDown = !_gearCmdDown || Grounded;    // 機輪壓著地不能收
         }
 
         // ------------------------------------------------------------------ 物理
@@ -321,7 +367,7 @@ namespace DUST.Vehicles
                 _lastPosition = transform.position;
                 DecodeControls(_netControls.Value);
                 UpdateAtmosphere(AirSpeed);
-                Grounded = Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, 1.2f, ~0, QueryTriggerInteraction.Ignore);
+                Grounded = RayGround(transform.position + Vector3.up * 0.5f, Vector3.down, 1.2f, out _);
                 return;
             }
             _lastPosition = transform.position;
@@ -367,9 +413,22 @@ namespace DUST.Vehicles
             {
                 Vector3 vdir = v / speed;
                 Vector3 liftDir = Vector3.Cross(vdir, right).normalized;
-                float drag = dragK * (DragCoefficient(mach) + _gear01 * 0.35f + _flap01 * 0.25f) + inducedK * liftK * cl * cl;
+                float drag = dragK * (DragCoefficient(mach) + _gear01 * 0.35f + _flap01 * 0.25f + _airbrake * airbrakeDrag) + inducedK * liftK * cl * cl;
                 if (mach > machLimit + 0.3f) drag += dragK * 6f * (mach - machLimit - 0.3f);   // 結構極限
                 _rb.AddForce(liftDir * liftK * q * cl - vdir * drag * q - right * sideK * q * beta);
+            }
+
+            // GTA 式「指哪飛哪」：速度方向每一步往機頭方向拉（等效空速夠、沒失速才有；低速 / 失速時慢慢失效，飛機會往下掉）。
+            // 只轉方向、不改大小 → 轉彎幾乎不掉速。地面不做（交給機輪）
+            if (!Grounded && speed > 1f)
+            {
+                float easNow = speed * Mathf.Sqrt(rho);
+                float grip = arcadeGrip * Mathf.Clamp01((easNow - 40f) / 25f) * (Stalling ? 0.2f : 1f);
+                if (grip > 0f)
+                {
+                    var vCur = _rb.linearVelocity;
+                    _rb.linearVelocity = Vector3.Slerp(vCur, fwd * vCur.magnitude, 1f - Mathf.Exp(-grip * dt));
+                }
             }
 
             // 操縱：角速度指令（本地座標：x 正 = 低頭、y 正 = 右轉、z 正 = 左滾）
@@ -412,8 +471,17 @@ namespace DUST.Vehicles
             Grounded = WheelForces(dt);
             if (Grounded && !wasGrounded && vyBefore < -1f) TouchDown?.Invoke(-vyBefore);
 
+            // 減速傘：主輪壓地、油門收著、速度還快 → 自動開傘；慢下來或推油門重飛 → 拋掉
+            float vNow = _rb.linearVelocity.magnitude;
+            if (!_chute && !_chuteUsed && Grounded && vNow > chuteDeploySpeed && _throttle < 0.3f && EngineOn) { _chute = true; _chuteUsed = true; }
+            // 慢下來、推油門重飛、或彈跳飛離地面（GTA 手感下接地後還拉著桿會再飛起來）→ 拋傘
+            if (_chute && (vNow < chuteJettisonSpeed || _throttle > 0.6f || (!Grounded && AltitudeAGL > 3f))) _chute = false;
+            if (!Grounded && AltitudeAGL > 20f) _chuteUsed = false;
+            if (_chute && vNow > 1f) _rb.AddForce(-_rb.linearVelocity / vNow * chuteDecel * m * (vNow * vNow / 4900f));
+
             // 對地高度 / G 值（HUD、特效）
-            AltitudeAGL = Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out var hit, 2000f, ~0, QueryTriggerInteraction.Ignore)
+            // 不算自己的碰撞體：倒飛時機身在原點下面，射線會打到自己（2 km 高空讀成 1 m，實測）
+            AltitudeAGL = RayGround(transform.position + Vector3.up * 0.5f, Vector3.down, 2000f, out var hit)
                 ? hit.distance - 0.5f
                 : DSTWorld.Instance && DSTWorld.Instance.IsRandom ? transform.position.y - DSTWorld.Instance.GroundHeight(transform.position.x, transform.position.z) : 2000f;
             Vector3 accel = (_rb.linearVelocity - _prevVel) / dt;
@@ -485,7 +553,9 @@ namespace DUST.Vehicles
                 float mShare = w.load / Physics.gravity.magnitude;
                 float lat = Mathf.Clamp(-vLat * mShare / dt * 0.5f, -wheelFriction * n, wheelFriction * n);
                 float brake = w.nose ? 0f : _brake;
-                float lonMax = rollingResistance * n + brake * brakeFriction * n;
+                // 防鎖死：煞車力最多照 1.5 倍靜載重算，不跟著落地衝擊 / 彈跳時的瞬間正向力（可到 8 倍）放大
+                //（彈跳後重落地又踩滿煞車，曾經 1 秒內從 42 m/s 停住，約 4 G，實測）
+                float lonMax = rollingResistance * n + brake * brakeFriction * Mathf.Min(n, w.load * 1.5f);
                 float lon = Mathf.Clamp(-vLon * mShare / dt, -lonMax, lonMax);
                 _rb.AddForceAtPosition(wheelRight * lat + wheelFwd * lon, hit.point);
             }
@@ -589,7 +659,7 @@ namespace DUST.Vehicles
         int EncodeControls()
         {
             int b(float x) => Mathf.Clamp(Mathf.RoundToInt((x + 1f) * 63f), 0, 126);
-            return b(_pitchIn) | b(_rollIn) << 7 | b(_yawIn) << 14 | (_gearCmdDown ? 1 : 0) << 21 | (_brake > 0.5f ? 1 : 0) << 22;
+            return b(_pitchIn) | b(_rollIn) << 7 | b(_yawIn) << 14 | (_gearCmdDown ? 1 : 0) << 21 | (_brake > 0.5f ? 1 : 0) << 22 | (_chute ? 1 : 0) << 23;
         }
 
         void DecodeControls(int c)
@@ -597,6 +667,7 @@ namespace DUST.Vehicles
             float f(int x) => (x & 127) / 63f - 1f;
             _pitchIn = f(c); _rollIn = f(c >> 7); _yawIn = f(c >> 14);
             _gearCmdDown = ((c >> 21) & 1) != 0;
+            _chute = ((c >> 23) & 1) != 0;
             _gear01 = Mathf.MoveTowards(_gear01, _gearCmdDown ? 1f : 0f, Time.fixedDeltaTime / gearTime);
         }
 
