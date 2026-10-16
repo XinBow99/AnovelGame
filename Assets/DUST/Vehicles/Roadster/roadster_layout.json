@@ -1,0 +1,296 @@
+{
+ "scale": 0.5,
+ "length": 2.155,
+ "width": 1.0,
+ "height": 0.5525,
+ "wheels": [
+  {
+   "name": "RD_Wheel_FL",
+   "pos": [
+    -0.425,
+    0.165,
+    0.695
+   ],
+   "radius": 0.165,
+   "width": 0.13,
+   "front": true,
+   "left": true
+  },
+  {
+   "name": "RD_Wheel_FR",
+   "pos": [
+    0.425,
+    0.165,
+    0.695
+   ],
+   "radius": 0.165,
+   "width": 0.13,
+   "front": true,
+   "left": false
+  },
+  {
+   "name": "RD_Wheel_RL",
+   "pos": [
+    -0.415,
+    0.165,
+    -0.735
+   ],
+   "radius": 0.165,
+   "width": 0.155,
+   "front": false,
+   "left": true
+  },
+  {
+   "name": "RD_Wheel_RR",
+   "pos": [
+    0.415,
+    0.165,
+    -0.735
+   ],
+   "radius": 0.165,
+   "width": 0.155,
+   "front": false,
+   "left": false
+  }
+ ],
+ "nozzles": [
+  {
+   "name": "RearOuter_L",
+   "obj": "RD_Nozzle_RearOuter_L",
+   "group": "rear",
+   "pos": [
+    -0.191,
+    0.2425,
+    -1.09
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "RearInner_L",
+   "obj": "RD_Nozzle_RearInner_L",
+   "group": "rear",
+   "pos": [
+    -0.0635,
+    0.2425,
+    -1.09
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "RearInner_R",
+   "obj": "RD_Nozzle_RearInner_R",
+   "group": "rear",
+   "pos": [
+    0.0635,
+    0.2425,
+    -1.09
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "RearOuter_R",
+   "obj": "RD_Nozzle_RearOuter_R",
+   "group": "rear",
+   "pos": [
+    0.191,
+    0.2425,
+    -1.09
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "DownFront_L",
+   "obj": "RD_Nozzle_DownFront_L",
+   "group": "down",
+   "pos": [
+    -0.39,
+    0.041,
+    0.47
+   ],
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "DownFront_R",
+   "obj": "RD_Nozzle_DownFront_R",
+   "group": "down",
+   "pos": [
+    0.39,
+    0.041,
+    0.47
+   ],
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "DownRear_L",
+   "obj": "RD_Nozzle_DownRear_L",
+   "group": "down",
+   "pos": [
+    -0.36,
+    0.06,
+    -0.985
+   ],
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "radius": 0.017
+  },
+  {
+   "name": "DownRear_R",
+   "obj": "RD_Nozzle_DownRear_R",
+   "group": "down",
+   "pos": [
+    0.36,
+    0.06,
+    -0.985
+   ],
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "radius": 0.017
+  },
+  {
+   "name": "Side_L",
+   "obj": "RD_Nozzle_Side_L",
+   "group": "side",
+   "pos": [
+    -0.4675,
+    0.16,
+    0.975
+   ],
+   "dir": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "radius": 0.018
+  },
+  {
+   "name": "Side_R",
+   "obj": "RD_Nozzle_Side_R",
+   "group": "side",
+   "pos": [
+    0.4675,
+    0.16,
+    0.975
+   ],
+   "dir": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "radius": 0.018
+  }
+ ],
+ "fans": [
+  {
+   "name": "RD_FanRotor_0",
+   "pos": [
+    0.191,
+    0.13,
+    -1.05
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.0475
+  },
+  {
+   "name": "RD_FanRotor_1",
+   "pos": [
+    0.0635,
+    0.13,
+    -1.05
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.0475
+  },
+  {
+   "name": "RD_FanRotor_2",
+   "pos": [
+    -0.0635,
+    0.13,
+    -1.05
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.0475
+  },
+  {
+   "name": "RD_FanRotor_3",
+   "pos": [
+    -0.191,
+    0.13,
+    -1.05
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "radius": 0.0475
+  }
+ ],
+ "wing": {
+  "obj": "RD_Wing",
+  "pivot": [
+   0.0,
+   0.4425,
+   -0.91
+  ],
+  "chord": 0.17,
+  "span": 0.82
+ },
+ "seatEye": [
+  -0.15,
+  0.465,
+  -0.19
+ ],
+ "com": [
+  -0.0,
+  0.18,
+  -0.075
+ ]
+}
