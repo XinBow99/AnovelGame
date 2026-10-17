@@ -5,7 +5,7 @@ namespace DUST.Player
 {
     // 鬃狼的「動作系統」資料：每個片段在載具座標裡的起點 / 終點、車門曲線、條件與權重。
     // 由 DUST/Player/Build Maned Wolf Player 從 Blender 匯出的 player_actions.json + FBX 取樣建出來，不要手改。
-    public enum DSTVehicleKind { Pickup, MeBike, Drone }
+    public enum DSTVehicleKind { Pickup, MeBike, Drone, Roadster }   // Roadster 只有騎乘片段（DSTSeatRider），沒有上下車動作
     public enum DSTActionKind { Enter, Exit, Ride, Steer, Fidget }
     public enum DSTActionSide { Left, Right, Rear, Any }
     public enum DSTDoorNeed { Any, Closed, Open }

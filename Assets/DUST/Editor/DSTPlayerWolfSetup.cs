@@ -18,6 +18,8 @@ namespace DUST.EditorTools
     {
         const string Dir = "Assets/DUST/Player/ManedWolf";
         public const string Fbx = Dir + "/SK_DST_Player_ManedWolf.fbx";
+        // 之後加的片段另外匯出（只有骨架、骨頭路徑跟主 FBX 一樣），不用重匯 11 MB 的主檔
+        static readonly string[] ExtraFbx = { Dir + "/SK_DST_Player_ManedWolf_Roadster.fbx" };
         const string Json = Dir + "/player_actions.json";
         public const string ControllerPath = Dir + "/AC_PlayerWolf.controller";
         public const string LibraryPath = Dir + "/ACT_PlayerWolf.asset";
@@ -26,7 +28,7 @@ namespace DUST.EditorTools
 
         static readonly HashSet<string> Loops = new HashSet<string>
         {
-            "MW2_Idle", "MW2_Walk", "MW2_Run", "PL_Pickup_Drive", "PL_Bike_Ride", "PL_Drone_Ride",
+            "MW2_Idle", "MW2_Walk", "MW2_Run", "PL_Pickup_Drive", "PL_Bike_Ride", "PL_Drone_Ride", "PL_Roadster_Recline",
         };
 
         [MenuItem("DUST/Player/Build Maned Wolf Player")]
@@ -42,6 +44,16 @@ namespace DUST.EditorTools
             SetupVehicle(DSTDroneSetup.PrefabPath, DSTVehicleKind.Drone, lib);
             DSTNetSetup.SetupAll();
             Debug.Log($"[DUST] 鬃狼玩家完成：{lib.clips.Count} 個動作片段");
+        }
+
+        /// <summary>只重匯片段 + 重建動作庫（加了新片段時用；不重建玩家 / 載具 Prefab）</summary>
+        [MenuItem("DUST/Player/Rebuild Action Library Only")]
+        public static DSTActionLibrary RebuildLibrary()
+        {
+            SetupImporter();
+            var lib = BuildLibrary();
+            Debug.Log($"[DUST] 鬃狼動作庫：{lib.clips.Count} 個動作片段");
+            return lib;
         }
 
         // ------------------------------------------------------------------ 匯入
@@ -78,6 +90,26 @@ namespace DUST.EditorTools
             mi.materialImportMode = ModelImporterMaterialImportMode.ImportViaMaterialDescription;
             foreach (var kv in remap)
                 mi.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), kv.Key), kv.Value);
+            SetupClips(mi);
+
+            foreach (var path in ExtraFbx)
+            {
+                if (!(AssetImporter.GetAtPath(path) is ModelImporter ex)) continue;
+                ex.bakeAxisConversion = true;
+                ex.globalScale = 1f;
+                ex.useFileScale = true;
+                ex.importCameras = false;
+                ex.importLights = false;
+                ex.materialImportMode = ModelImporterMaterialImportMode.None;
+                ex.animationType = ModelImporterAnimationType.Generic;
+                ex.avatarSetup = ModelImporterAvatarSetup.NoAvatar;
+                ex.preserveHierarchy = true;   // 只有骨架一個根節點時 Unity 會把它摺掉 → 路徑少了 Player_ManedWolf/，片段綁不到骨頭
+                SetupClips(ex);
+            }
+        }
+
+        static void SetupClips(ModelImporter mi)
+        {
             var clips = new List<ModelImporterClipAnimation>();
             foreach (var c in mi.defaultClipAnimations)
             {
@@ -90,8 +122,14 @@ namespace DUST.EditorTools
             mi.SaveAndReimport();
         }
 
-        static Dictionary<string, AnimationClip> Clips() =>
-            AssetDatabase.LoadAllAssetsAtPath(Fbx).OfType<AnimationClip>().Where(c => !c.name.StartsWith("__preview")).ToDictionary(c => c.name);
+        static Dictionary<string, AnimationClip> Clips()
+        {
+            var all = new Dictionary<string, AnimationClip>();
+            foreach (var path in ExtraFbx.Prepend(Fbx))
+                foreach (var c in AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>())
+                    if (!c.name.StartsWith("__preview")) all[c.name] = c;
+            return all;
+        }
 
         // ------------------------------------------------------------------ 走路
         static void BuildController()
@@ -148,7 +186,7 @@ namespace DUST.EditorTools
                 if (!clips.TryGetValue(kv.Key, out var clip)) { Debug.LogWarning("[DUST] FBX 裡沒有 " + kv.Key); continue; }
                 var m = (Dictionary<string, object>)kv.Value;
                 var a = new DSTActionClip { name = kv.Key, clip = clip };
-                a.vehicle = Get(m, "vehicle", "Pickup") switch { "MeBike" => DSTVehicleKind.MeBike, "Drone" => DSTVehicleKind.Drone, _ => DSTVehicleKind.Pickup };
+                a.vehicle = Get(m, "vehicle", "Pickup") switch { "MeBike" => DSTVehicleKind.MeBike, "Drone" => DSTVehicleKind.Drone, "Roadster" => DSTVehicleKind.Roadster, _ => DSTVehicleKind.Pickup };
                 string kind = Get(m, "kind", "Ride");
                 a.kind = kind switch
                 {

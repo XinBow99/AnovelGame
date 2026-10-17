@@ -22,8 +22,12 @@ namespace DUST.EditorTools
         const string MatDir = Dir + "/Materials";
         public const string PrefabPath = Dir + "/PF_Vehicle_Roadster.prefab";
 
-        // 實車約 1,700 kg（MotorTrend 估），半尺寸 ×1/8
+        // 實車約 1,700 kg（MotorTrend 估），半尺寸 ×1/8；這是氣瓶滿的時候（DSTThrusterSystem 會隨用氣減少）
         const float Mass = 212.5f;
+        // 每個噴嘴最大推力（N，半尺寸 = 實車 ×1/8）：後 5.4 kN、下 10 kN、側 5 kN（設計估算）
+        const float RearThrust = 680f, DownThrust = 1250f, SideThrust = 625f;
+        // 駕駛的鬃狼像臥佛一樣側躺在兩個座位上、單手（右前腳掌）按著方向盤中央開車（Tools/Blender/wolf_roadster_recline.py）。
+        // 駕駛座視角不放在躺著的頭上：那裡跟儀表板一樣高，幾乎看不到路（實測）；維持坐姿眼睛高度（身體在這個視角只投影子）。
 
         [System.Serializable] public class WheelL { public string name; public float[] pos; public float radius, width; public bool front, left; }
         [System.Serializable] public class NozzleL { public string name, obj, group; public float[] pos, dir; public float radius; }
@@ -74,6 +78,23 @@ namespace DUST.EditorTools
                 name = w.name, local = V(w.pos), radius = w.radius, front = w.front, left = w.left
             });
             car.yoke = FindDeep(go.transform, "RD_Yoke");
+
+            // 冷氣推進器：10 個噴嘴（位置 / 噴氣方向從 layout），推力照 DSTThrusterSystem 開頭的估算
+            var thr = go.AddComponent<DSTThrusterSystem>();
+            thr.thrusters = System.Array.ConvertAll(lay.nozzles, n => new DSTThrusterSystem.Thruster
+            {
+                name = n.name,
+                group = n.group == "rear" ? DSTThrusterSystem.Group.Rear : n.group == "down" ? DSTThrusterSystem.Group.Down : DSTThrusterSystem.Group.Side,
+                localPos = V(n.pos), localDir = V(n.dir).normalized, radius = n.radius,
+                maxThrust = n.group == "rear" ? RearThrust : n.group == "down" ? DownThrust : SideThrust,
+            });
+            var fx = go.AddComponent<DSTThrusterFX>();
+            fx.vaporMaterial = VaporMaterial();
+
+            // 主動空力 + 吸地風扇（模式：低風阻 / 高下壓力；低速吸地 / 高速流場）
+            var aero = go.AddComponent<DSTRoadsterAero>();
+            aero.wing = FindDeep(go.transform, lay.wing.obj);
+            aero.fanRotors = System.Array.ConvertAll(lay.fans, f => FindDeep(go.transform, f.name));
             go.AddComponent<DSTPhysicsClaimer>();
 
             // 上下車：左邊（駕駛座側，-X）、右邊、車尾
@@ -88,6 +109,8 @@ namespace DUST.EditorTools
                 Child(go.transform, "Exit_Right", new Vector3(0.95f, 0f, -0.2f)),
                 Child(go.transform, "Exit_Rear", new Vector3(0f, 0f, -1.6f)),
             };
+            // 駕駛的鬃狼躺進兩個座位（以前留在上車的地方，玩家回報）
+            DSTSeatRiderSetup.AddNative(go, "PL_Roadster_Recline", "PL_Roadster_Recline_SteerLeft", "PL_Roadster_Recline_SteerRight");
 
             PrefabUtility.SaveAsPrefabAsset(go, PrefabPath);
             Object.DestroyImmediate(go);
@@ -149,6 +172,10 @@ namespace DUST.EditorTools
                 ("M_DST_Roadster_Rubber", DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Rubber", new Color(0.03f, 0.03f, 0.03f), 0f, 0.15f)),
                 ("M_DST_Roadster_Spoke", DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Spoke", new Color(0.05f, 0.05f, 0.055f), 0.7f, 0.6f)),
                 ("M_DST_Roadster_Brass", DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Brass", new Color(0.72f, 0.55f, 0.33f), 1f, 0.65f)),
+                // 後方出氣管：偏暗的暖灰燒灼金屬（Gravity 圖），不要亮銀
+                ("M_DST_Roadster_Burnt", TwoSided(DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Burnt", new Color(0.36f, 0.28f, 0.20f), 1f, 0.55f))),
+                // 風扇噴射引擎的子彈形輪轂：深石墨金屬
+                ("M_DST_Roadster_Graphite", DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Graphite", new Color(0.07f, 0.07f, 0.075f), 0.8f, 0.62f)),
                 ("M_DST_Roadster_Interior", DSTVehicleSetup.LitAt(MatDir, "M_DST_Roadster_Interior", new Color(0.16f, 0.16f, 0.165f), 0f, 0.4f)),
                 ("M_DST_Roadster_Screen", Emissive("M_DST_Roadster_Screen", new Color(0.01f, 0.012f, 0.015f), new Color(0.25f, 0.35f, 0.45f) * 1.2f)),   // ×6 會整片白（實測）
                 ("M_DST_Roadster_HeadLamp", Emissive("M_DST_Roadster_HeadLamp", new Color(0.9f, 0.95f, 1f), new Color(0.85f, 0.92f, 1f) * 60f)),
@@ -181,6 +208,45 @@ namespace DUST.EditorTools
             m.SetFloat("_UseEmissiveIntensity", 0f);
             m.SetFloat("_EmissiveExposureWeight", 0f);    // 不吃曝光：數值直接是畫面亮度（跟米格-25 的火焰一樣好調）
             HDMaterial.ValidateMaterial(m);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // 白霧粒子：DUST/VaporParticle（吃粒子頂點顏色、軟粒子）+ 邊緣很軟、中間有點雲絮的圓形貼圖
+        static Material VaporMaterial()
+        {
+            const int N = 64;
+            string texPath = Dir + "/Textures/T_DST_Roadster_Vapor.png";
+            System.IO.Directory.CreateDirectory(Dir + "/Textures");
+            var t = new Texture2D(N, N, TextureFormat.RGBA32, false);
+            for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float u = (x + 0.5f) / N, v = (y + 0.5f) / N;
+                float r = Mathf.Sqrt((u - 0.5f) * (u - 0.5f) + (v - 0.5f) * (v - 0.5f)) * 2f;
+                float soft = Mathf.Pow(Mathf.Clamp01(1f - r), 1.7f);
+                float n = 0.7f + 0.3f * Mathf.PerlinNoise(u * 5f + 2f, v * 5f + 7f);
+                t.SetPixel(x, y, new Color(1f, 1f, 1f, soft * n));
+            }
+            t.Apply();
+            System.IO.File.WriteAllBytes(texPath, t.EncodeToPNG());
+            Object.DestroyImmediate(t);
+            AssetDatabase.ImportAsset(texPath);
+            var ti = (TextureImporter)AssetImporter.GetAtPath(texPath);
+            ti.wrapMode = TextureWrapMode.Clamp;
+            ti.alphaIsTransparency = true;
+            ti.SaveAndReimport();
+            string path = MatDir + "/M_DST_Roadster_Vapor.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            var shader = Shader.Find("DUST/VaporParticle");
+            if (!m) { m = new Material(shader); AssetDatabase.CreateAsset(m, path); }
+            m.shader = shader;
+            m.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+            m.SetColor("_Color", Color.white);
+            m.SetFloat("_Brightness", 1f);
+            m.SetFloat("_SoftDistance", 0.25f);
+            m.renderQueue = 3000;
+            m.enableInstancing = true;
             EditorUtility.SetDirty(m);
             return m;
         }

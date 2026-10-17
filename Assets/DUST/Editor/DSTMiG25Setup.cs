@@ -98,6 +98,8 @@ namespace DUST.EditorTools
                 Child(go.transform, "Exit_Right", new Vector3(2.3f, 0f, 2.0f)),
                 Child(go.transform, "Exit_Front", new Vector3(0f, 0f, 7.6f)),
             };
+            // 駕駛的鬃狼坐進座艙（以前留在上機的地方，玩家回報）
+            DSTSeatRiderSetup.Add(go, eye, Vector3.zero);
 
             PrefabUtility.SaveAsPrefabAsset(go, PrefabPath);
             Object.DestroyImmediate(go);

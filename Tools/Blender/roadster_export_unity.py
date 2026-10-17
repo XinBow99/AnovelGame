@@ -67,7 +67,7 @@ def layout(ns):
         group = "rear" if name.startswith("Rear") else "down" if name.startswith("Down") else "side"
         nozzles.append(dict(name=name, obj="RD_Nozzle_" + name, group=group, pos=to_unity(c),
                             dir=dir_unity(d), radius=round(r * SCALE, 5)))
-    fans = [dict(name="RD_FanRotor_%d" % i, pos=to_unity((x, 2.10, ns["FAN_Z"])),
+    fans = [dict(name="RD_FanRotor_%d" % i, pos=to_unity((x, ns["FAN_Y"], ns["FAN_Z"])),
                  dir=dir_unity((0, 1, 0)), radius=round(ns["FAN_R"] * SCALE, 5))
             for i, x in enumerate(ns["FAN_X"])]
     le = ns["WING_LE"]

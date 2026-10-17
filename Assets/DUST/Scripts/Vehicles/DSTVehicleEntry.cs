@@ -19,6 +19,8 @@ namespace DUST.Vehicles
         readonly NetworkVariable<ulong> _driver = new NetworkVariable<ulong>(NoDriver);
 
         public bool HasDriver => _driver.Value != NoDriver;
+        /// <summary>目前駕駛的 ClientId（沒人開 = ulong.MaxValue）：DSTSeatRider 用來把那位玩家的鬃狼放進座位</summary>
+        public ulong DriverId => _driver.Value;
         public bool CanEnter => !HasDriver && Time.time >= _requestPendingUntil && (!_actions || _actions.CurrentPhase == DSTRideActions.Phase.None);
         public bool IsLocalDriver => _localDriver != null;
         public IDSTDrivable Drivable { get; private set; }

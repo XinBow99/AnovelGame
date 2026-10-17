@@ -17,6 +17,11 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_DST_Roadster_Burnt
+    second: {fileID: 2100000, guid: f34f20dfacc40bf4684be81492c8c763, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_DST_Roadster_Carbon
     second: {fileID: 2100000, guid: e1336712c7215404d9306243acb27851, type: 2}
   - first:
@@ -24,6 +29,11 @@ ModelImporter:
       assembly: UnityEngine.CoreModule
       name: M_DST_Roadster_Glass
     second: {fileID: 2100000, guid: f4e491cab52cbf744a5dac2d8673e515, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_DST_Roadster_Graphite
+    second: {fileID: 2100000, guid: 648007bb580fcef4d92b2607bb7fdc75, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule

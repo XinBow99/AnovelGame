@@ -168,6 +168,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 688647524034883915}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &4267921126415395289
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1866098641196043124}
+  m_Layer: 0
+  m_Name: Seat_Rider_Anchor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1866098641196043124
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4267921126415395289}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 688647524034883915}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4969236678972860109
 GameObject:
   m_ObjectHideFlags: 0
@@ -179,11 +210,15 @@ GameObject:
   - component: {fileID: 688647524034883915}
   - component: {fileID: 3728640342866813078}
   - component: {fileID: 485784069877441788}
+  - component: {fileID: 3894495865258392400}
+  - component: {fileID: 4285977382855856196}
+  - component: {fileID: 2704329572162908367}
   - component: {fileID: 8014297194442034551}
   - component: {fileID: 6856013586532895316}
-  - component: {fileID: 835277828901644812}
-  - component: {fileID: 6916821377001698136}
-  - component: {fileID: 587075345367551912}
+  - component: {fileID: 860156938973671069}
+  - component: {fileID: 194706075624874560}
+  - component: {fileID: 7281371988244012639}
+  - component: {fileID: 3138523504208992364}
   m_Layer: 0
   m_Name: PF_Vehicle_Roadster
   m_TagString: Untagged
@@ -211,6 +246,7 @@ Transform:
   - {fileID: 756042812866343827}
   - {fileID: 8528633186762064321}
   - {fileID: 8779019223037136906}
+  - {fileID: 1866098641196043124}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3728640342866813078
@@ -278,7 +314,7 @@ MonoBehaviour:
   yoke: {fileID: 4456336303790751189}
   yokeRatio: 5.5
   maxPowerW: 88000
-  motorPeakTorque: 88
+  motorPeakTorque: 140
   gearRatio: 6
   motorMaxRpm: 30000
   torqueCurve:
@@ -326,7 +362,9 @@ MonoBehaviour:
   compressionDamping: 0.35
   reboundDamping: 0.6
   antiRoll: 0.6
-  bumpStopFactor: 6
+  bumpStopFactor: 20
+  bumpStart: 1.25
+  bumpReboundSpeed: 1
   maxSteerDeg: 30
   steerAtSpeedDeg: 5
   steerFalloffSpeed: 55
@@ -335,6 +373,147 @@ MonoBehaviour:
   liftCoef: -0.03
   externalInput: 0
   tailEmission: {r: 40, g: 1.1999999, b: 0.79999995, a: 40}
+--- !u!114 &3894495865258392400
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4969236678972860109}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5f3bda0a282a194e8f1642c86e35191, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTThrusterSystem
+  ShowTopMostFoldoutHeaderGroup: 1
+  thrusters:
+  - name: RearOuter_L
+    group: 0
+    localPos: {x: -0.191, y: 0.229, z: -1.109}
+    localDir: {x: 0, y: 0, z: -1}
+    maxThrust: 680
+    radius: 0.018
+  - name: RearInner_L
+    group: 0
+    localPos: {x: -0.0635, y: 0.229, z: -1.109}
+    localDir: {x: 0, y: 0, z: -1}
+    maxThrust: 680
+    radius: 0.018
+  - name: RearInner_R
+    group: 0
+    localPos: {x: 0.0635, y: 0.229, z: -1.109}
+    localDir: {x: 0, y: 0, z: -1}
+    maxThrust: 680
+    radius: 0.018
+  - name: RearOuter_R
+    group: 0
+    localPos: {x: 0.191, y: 0.229, z: -1.109}
+    localDir: {x: 0, y: 0, z: -1}
+    maxThrust: 680
+    radius: 0.018
+  - name: DownFront_L
+    group: 1
+    localPos: {x: -0.39, y: 0.041, z: 0.47}
+    localDir: {x: 0, y: -1, z: 0}
+    maxThrust: 1250
+    radius: 0.018
+  - name: DownFront_R
+    group: 1
+    localPos: {x: 0.39, y: 0.041, z: 0.47}
+    localDir: {x: 0, y: -1, z: 0}
+    maxThrust: 1250
+    radius: 0.018
+  - name: DownRear_L
+    group: 1
+    localPos: {x: -0.36, y: 0.06, z: -0.985}
+    localDir: {x: 0, y: -1, z: 0}
+    maxThrust: 1250
+    radius: 0.017
+  - name: DownRear_R
+    group: 1
+    localPos: {x: 0.36, y: 0.06, z: -0.985}
+    localDir: {x: 0, y: -1, z: 0}
+    maxThrust: 1250
+    radius: 0.017
+  - name: Side_L
+    group: 2
+    localPos: {x: -0.4675, y: 0.16, z: 0.975}
+    localDir: {x: -1, y: 0, z: 0}
+    maxThrust: 625
+    radius: 0.018
+  - name: Side_R
+    group: 2
+    localPos: {x: 0.4675, y: 0.16, z: 0.975}
+    localDir: {x: 1, y: 0, z: 0}
+    maxThrust: 625
+    radius: 0.018
+  gasCapacityKg: 36
+  exhaustVelocity: 424
+  reserveFraction: 0.15
+  compressorRateKg: 0.42
+  compressorPowerW: 9000
+  compressorDelay: 1
+  valveTime: 0.04
+  flightAssist: 1
+  maxRateDeg: {x: 150, y: 90, z: 270}
+  rateGain: 8
+  levelGain: 3
+  climbSpeed: 4
+--- !u!114 &4285977382855856196
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4969236678972860109}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 617867382c708904396becab1144402e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTThrusterFX
+  vaporMaterial: {fileID: 2100000, guid: 6050b5135b3538f4b911f8625da002ce, type: 2}
+  jetLength: 1
+  cloudAmount: 1
+--- !u!114 &2704329572162908367
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4969236678972860109}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b454c937783f6643bf323eea2ee2d46, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTRoadsterAero
+  ShowTopMostFoldoutHeaderGroup: 1
+  wing: {fileID: 4508036523777516558}
+  fanRotors:
+  - {fileID: 3419684729525010220}
+  - {fileID: 8439462795683910205}
+  - {fileID: 2746997280611140745}
+  - {fileID: 6796090507687151950}
+  wingRaise: 0.15
+  wingBasePitch: 14
+  wingCornerPitch: 8
+  wingBrakePitch: 38
+  wingHighSpeedPitch: 9
+  wingRate: 70
+  wingRaiseRate: 0.25
+  wingDownCoef: 0.33
+  wingDragCoef: 0.045
+  rideLowerTrack: 0.008
+  fansEnabled: 0
+  suctionWeights: 1.2
+  highSpeedSuctionWeights: 1
+  flowCoef: 0.25
+  lowToHighSpeed: 22
+  sealGap: 0.06
+  lostGap: 0.16
+  seal: 0.92
+  fanSpinUp: 0.5
+  fanPowerW: 3500
+  fanThrustWeights: 0.03
 --- !u!114 &8014297194442034551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -373,7 +552,24 @@ MonoBehaviour:
   maxExitSpeedKmh: 10
   chaseDistance: 3.4
   chaseHeight: 1.1
---- !u!114 &835277828901644812
+--- !u!114 &860156938973671069
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4969236678972860109}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6c08c2d785fa964db2b26d0668c007f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DUST.Vehicles.DSTSeatRider
+  library: {fileID: 11400000, guid: 71a976315a0413447ab2e052f8e95fe3, type: 2}
+  anchor: {fileID: 1866098641196043124}
+  loopClip: PL_Roadster_Recline
+  steerLeftClip: PL_Roadster_Recline_SteerLeft
+  steerRightClip: PL_Roadster_Recline_SteerRight
+--- !u!114 &194706075624874560
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -400,7 +596,7 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
---- !u!114 &6916821377001698136
+--- !u!114 &7281371988244012639
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -446,7 +642,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &587075345367551912
+--- !u!114 &3138523504208992364
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -754,13 +950,38 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+--- !u!4 &2746997280611140745 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5028635760734722504, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+  m_PrefabInstance: {fileID: 7193945066168245569}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &3419684729525010220 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5522310106299736685, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+  m_PrefabInstance: {fileID: 7193945066168245569}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &4456336303790751189 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -2445999208747097964, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
   m_PrefabInstance: {fileID: 7193945066168245569}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &4508036523777516558 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6726624918300997967, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+  m_PrefabInstance: {fileID: 7193945066168245569}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &6796090507687151950 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -4789975526456880113, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+  m_PrefabInstance: {fileID: 7193945066168245569}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &7231865732552506026 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
+  m_PrefabInstance: {fileID: 7193945066168245569}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8439462795683910205 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -7581536886217470084, guid: e7fbcac96e2967a419c8769455b21133, type: 3}
   m_PrefabInstance: {fileID: 7193945066168245569}
   m_PrefabAsset: {fileID: 0}

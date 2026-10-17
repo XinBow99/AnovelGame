@@ -1364,5 +1364,41 @@
    "additive_safe": false,
    "desc": "被風吹得甩一下頭，耳朵被吹起來又貼回去"
   }
+,
+  "PL_Roadster_Recline": {
+   "vehicle": "Roadster",
+   "kind": "Ride",
+   "frames": [
+    0,
+    90
+   ],
+   "fps": 30,
+   "loop": true,
+   "desc": "Roadster：像臥佛一樣側躺在兩個座位上，左前腳撐著臉頰，右前腳掌單手按在方向盤中央開車"
+  },
+  "PL_Roadster_Recline_SteerLeft": {
+   "vehicle": "Roadster",
+   "kind": "Ride",
+   "frames": [
+    0,
+    1
+   ],
+   "pose": true,
+   "steer_deg": 60,
+   "fps": 30,
+   "desc": "右前腳掌貼著方向盤中央往左轉 60°"
+  },
+  "PL_Roadster_Recline_SteerRight": {
+   "vehicle": "Roadster",
+   "kind": "Ride",
+   "frames": [
+    0,
+    1
+   ],
+   "pose": true,
+   "steer_deg": -60,
+   "fps": 30,
+   "desc": "右前腳掌貼著方向盤中央往右轉 60°"
+  }
  }
 }

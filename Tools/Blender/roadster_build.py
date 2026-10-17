@@ -59,6 +59,10 @@ def materials():
         rubber=mat("M_DST_Roadster_Rubber", (0.025, 0.025, 0.025), rough=0.85),
         spoke=mat("M_DST_Roadster_Spoke", (0.62, 0.62, 0.64), metal=1.0, rough=0.22),
         brass=mat("M_DST_Roadster_Brass", (0.72, 0.55, 0.33), metal=1.0, rough=0.28),
+        # rear outlets: dark warm heat-tinted metal, not bright silver (Gravity photo)
+        burnt=mat("M_DST_Roadster_Burnt", (0.30, 0.235, 0.17), metal=1.0, rough=0.42),
+        # fan-jet hubs: dark graphite metal
+        graphite=mat("M_DST_Roadster_Graphite", (0.07, 0.07, 0.075), metal=0.8, rough=0.38),
         head=mat("M_DST_Roadster_HeadLamp", (0.9, 0.95, 1.0), emit=(0.85, 0.92, 1.0), strength=30),
         tail=mat("M_DST_Roadster_TailLamp", (0.5, 0.02, 0.02), emit=(1.0, 0.03, 0.02), strength=25),
         interior=mat("M_DST_Roadster_Interior", (0.16, 0.16, 0.165), rough=0.55),
@@ -216,9 +220,22 @@ BODY = [
     (0.500, ((0, .790), (.55, .810), (.82, .840), (.97, .780), (.97, .300), (.94, .105), (.88, .090), (0, .090))),
     (1.150, ((0, .830), (.52, .850), (.84, .870), (1.0, .830), (1.0, .345), (.97, .115), (.91, .100), (0, .100))),
     (1.470, ((0, .840), (.50, .860), (.85, .880), (1.0, .850), (1.0, .370), (.97, .130), (.91, .110), (0, .110))),
-    (1.900, ((0, .850), (.50, .858), (.88, .868), (.99, .850), (.98, .400), (.95, .250), (.88, .250), (0, .250))),
-    (2.160, ((0, .850), (.50, .855), (.88, .860), (.93, .850), (.92, .420), (.90, .280), (.86, .270), (0, .270))),
+    # behind the rear wheels the lower body pulls in (black side pods), so from behind the tyres
+    # stand out as solid outer masses either side of the central opening (rear photos)
+    (1.900, ((0, .850), (.50, .858), (.88, .868), (.99, .850), (.96, .560), (.80, .300), (.74, .250), (0, .250))),
+    (2.060, ((0, .852), (.50, .856), (.88, .862), (.95, .850), (.90, .600), (.74, .320), (.70, .270), (0, .270))),
 ]
+# Tail (Tesla Gravity / MotorTrend rear photos): the body does NOT end in a flat plate. The last
+# ring is closed by a cap that bulges back in plan (TAIL_BULGE at the centre, wrapping forward
+# into the wheel arches at the sides); white panel above TAIL_SPLIT (light bar + plate), black
+# below, where one big chamfered opening (REAR_OPEN) houses the nozzle row and the 4 fan-jets.
+TAIL_Y, TAIL_BULGE, TAIL_SPLIT = 2.060, 0.11, 0.585
+REAR_OPEN = [(-0.44, 0.525), (0.44, 0.525), (0.60, 0.425), (0.60, 0.17), (0.55, 0.12),
+             (-0.55, 0.12), (-0.60, 0.17), (-0.60, 0.425)]          # opening outline (x, z)
+REAR_FRAME = [(-0.475, 0.565), (0.475, 0.565), (0.648, 0.448), (0.648, 0.150), (0.585, 0.085),
+              (-0.585, 0.085), (-0.648, 0.150), (-0.648, 0.448)]    # frame outer outline
+FRAME_FRONT, FRAME_BACK, OPEN_BACK = 2.200, 2.040, 1.960
+SHELF_Z = 0.385          # divider between the nozzle row (above) and the fan bays (below)
 
 
 def body_section(y):
@@ -243,15 +260,29 @@ def build_body(col, M):
                     [AXLE_F + d for d in (-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45)] +
                     [AXLE_R + d for d in (-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.42)]))
     rings = [[(x, y, z) for x, z in mirror_half(list(body_section(y)))] for y in ys]
-    loft_rings(bm, rings)
+    vr, _, _ = loft_rings(bm, rings, cap_end=False)
+    # tail cap: rings shrunk toward the centre line in x and pushed back on a parabola, so the
+    # rear panel curves round to the sides instead of ending in a flat plate
+    last = vr[-1]
+    prev = last
+    for s in (0.86, 0.68, 0.48, 0.28, 0.10):
+        ring = [bm.verts.new((v.co.x * s, TAIL_Y + TAIL_BULGE * (1.0 - s * s), v.co.z)) for v in last]
+        n = len(ring)
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((prev[i], prev[j], ring[j], ring[i]))
+        prev = ring
+    bm.faces.new(prev)
     # materials: 0 white paint, 1 black composite, 2 carbon
     bm.normal_update()
     for f in bm.faces:
         c = f.calc_center_median()
         sec = body_section(c.y)
         f.material_index = 0
-        if f.normal.y > 0.55 and c.y > 1.8:
-            f.material_index = 1                   # whole tail face below the deck is black
+        if c.y > TAIL_Y - 0.01 and f.normal.y > 0.3:
+            # white panel over a black lower tail; the white edge sweeps up toward the sides
+            split = TAIL_SPLIT + 0.13 * min(1.0, abs(c.x) / 0.9) ** 2
+            f.material_index = 0 if c.z > split else 1
         elif f.normal.y < -0.35 and c.y < -2.07:
             f.material_index = 1                   # front fascia under the light bar
         elif c.z < sec[4][1] + 0.004:
@@ -269,10 +300,8 @@ def build_body(col, M):
             cut = new_obj("_tmp_arch", cb, [M["black"]], col, smooth=False)
             apply_bool(ob, cut, transfer=True)
             bpy.data.objects.remove(cut, do_unlink=True)
-    # rear tray: open box under the nozzle row housing the 4 fan-jets
-    cb = bmesh.new()
-    box(cb, (0, 2.30, (TRAY_Z0 + TRAY_Z1) / 2), (TRAY_W, 2 * (2.30 - TRAY_BACK), TRAY_Z1 - TRAY_Z0))
-    cut = new_obj("_tmp_tray", cb, [M["black"]], col, smooth=False)
+    # rear opening: one deep chamfered cavity for the nozzle row + fan bays (walls black)
+    cut = new_obj("_tmp_open", prism(REAR_OPEN, OPEN_BACK, 2.45), [M["black"]], col, smooth=False)
     apply_bool(ob, cut, transfer=True)
     bpy.data.objects.remove(cut, do_unlink=True)
     ob.data.set_sharp_from_angle(angle=math.radians(SHARP))
@@ -282,7 +311,35 @@ def build_body(col, M):
 
 
 SHARP = 20          # facet edges sharper than this stay hard (cyber look)
-TRAY_W, TRAY_Z0, TRAY_Z1, TRAY_BACK = 1.30, 0.12, 0.40, 1.96
+
+
+def prism(outline, y0, y1):
+    """Closed prism: polygon outline (x, z) extruded along Y from y0 to y1 (a bmesh)."""
+    bm = bmesh.new()
+    a = [bm.verts.new((x, y0, z)) for x, z in outline]
+    b = [bm.verts.new((x, y1, z)) for x, z in outline]
+    n = len(outline)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new(list(reversed(a)))
+    bm.faces.new(b)
+    return bm
+
+
+def frame_ring(bm, outer, inner, y0, y1):
+    """Thick frame between two outlines (same vertex count), from y0 (back) to y1 (front)."""
+    n = len(outer)
+    of = [bm.verts.new((x, y1, z)) for x, z in outer]
+    inf = [bm.verts.new((x, y1, z)) for x, z in inner]
+    ob = [bm.verts.new((x, y0, z)) for x, z in outer]
+    ib = [bm.verts.new((x, y0, z)) for x, z in inner]
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((of[i], of[j], inf[j], inf[i]))      # front face
+        bm.faces.new((ob[i], ob[j], of[j], of[i]))        # outer wall
+        bm.faces.new((inf[i], inf[j], ib[j], ib[i]))      # inner wall
+        bm.faces.new((ib[i], ib[j], ob[j], ob[i]))        # back face
 
 
 # Greenhouse (y, base half-width, roof half-width, roof z), side photo: windscreen foot right
@@ -376,12 +433,40 @@ def build_cabin(col, M):
 # Cockpit opening cut into the body under the canopy (driver sees the tub; you see the seat
 # through the glass). Real metres: x +-0.70, y -0.80..1.05, from the tub floor up.
 COCKPIT = dict(x=0.70, y0=-0.80, y1=1.05, z0=0.22)
-SEAT_X = 0.30        # single seat on the car's left (+X)
+SEAT_X = 0.30        # driver on the car's left (+X); passenger seat mirrored at -SEAT_X
 EYE = (SEAT_X, 0.38, 0.93)
 
 
 # ---------------------------------------------------------------- lights
+def surface_strip(col, name, mat_, pts, body_bvh, width=0.025, depth=0.012, outward=0.004):
+    """Thin ribbon laid onto the body: each point is ray-cast along its direction onto the
+    surface, then the strip is built on the hit points (follows curvature, never floats)."""
+    bm = bmesh.new()
+    ribbon = []
+    for p, dirn in pts:
+        p = Vector(p)
+        dirn = Vector(dirn).normalized()
+        hit = body_bvh.ray_cast(p - dirn * 0.3, dirn, 2.0)
+        loc, nrm = (hit[0], hit[1]) if hit[0] is not None else (p, -dirn)
+        ribbon.append((loc + nrm * outward, nrm))
+    rows = []
+    for i, (loc, nrm) in enumerate(ribbon):
+        a = ribbon[max(i - 1, 0)][0]
+        b = ribbon[min(i + 1, len(ribbon) - 1)][0]
+        u = nrm.cross((b - a).normalized()).normalized() * width * 0.5
+        rows.append([bm.verts.new(loc + u), bm.verts.new(loc - u),
+                     bm.verts.new(loc - u - nrm * depth), bm.verts.new(loc + u - nrm * depth)])
+    for a, b in zip(rows[:-1], rows[1:]):
+        for k in range(4):
+            j = (k + 1) % 4
+            bm.faces.new((a[k], a[j], b[j], b[k]))
+    bm.faces.new(list(reversed(rows[0])))
+    bm.faces.new(rows[-1])
+    return new_obj(name, bm, [mat_], col, sharp_angle=30)
+
+
 def build_lights(col, M, body):
+    bvh = BVHTree.FromObject(body, bpy.context.evaluated_depsgraph_get())
     # one thin light bar along the hood's leading edge, between the V creases
     bm = bmesh.new()
     box(bm, (0, -2.150, 0.441), (1.40, 0.016, 0.010))
@@ -396,27 +481,19 @@ def build_lights(col, M, body):
         rot = Matrix.Rotation(math.atan2(d.x, -d.y), 4, "Z") @ Matrix.Rotation(-math.atan2(d.z, d.xy.length), 4, "X")
         box(bm, mid, (0.016, d.length, 0.012), rot)
     slit = new_obj(PREFIX + "HeadSlits", bm, [M["head"]], col, smooth=False)
-    # tail: black band with two red lines (upper bright bar + thin lower line), full width
-    bm = bmesh.new()
-    box(bm, (0, 2.165, 0.800), (1.82, 0.014, 0.075))
-    new_obj(PREFIX + "TailBand", bm, [M["black"]], col, smooth=False)
-    bm = bmesh.new()
-    box(bm, (0, 2.174, 0.815), (1.78, 0.006, 0.012))
-    box(bm, (0, 2.174, 0.772), (1.80, 0.006, 0.005))
-    tail = new_obj(PREFIX + "TailLamp", bm, [M["tail"]], col, smooth=False)
+    # tail: everything follows the curved rear panel (projected onto it, not boxes on a plate):
+    # black band, the bright red bar at the top edge, a thin bright metal edge under it
+    def across(z, half, k=33):
+        return [((-half + 2 * half * i / (k - 1), TAIL_Y + 0.5, z), (0, -1, 0)) for i in range(k)]
+    surface_strip(col, PREFIX + "TailBand", M["black"], across(0.808, 0.90), bvh, width=0.062, outward=0.002)
+    tail = surface_strip(col, PREFIX + "TailLamp", M["tail"], across(0.818, 0.89), bvh, width=0.020, outward=0.005)
+    surface_strip(col, PREFIX + "TailEdge", M["titanium"], across(0.770, 0.88), bvh, width=0.010, outward=0.003)
     # plate plinth (US plate 305 x 152 mm; also the scale ruler used on the Tesla photos)
+    hit = bvh.ray_cast(Vector((0, TAIL_Y + 0.5, 0.665)), Vector((0, -1, 0)), 1.0)
+    py = hit[0].y if hit[0] is not None else TAIL_Y + TAIL_BULGE
     bm = bmesh.new()
-    box(bm, (0, 2.165, 0.655), (0.315, 0.012, 0.16))
+    box(bm, (0, py + 0.006, 0.665), (0.315, 0.014, 0.16))
     new_obj(PREFIX + "PlatePlinth", bm, [M["titanium"]], col, smooth=False)
-    # carbon fender plates behind the rear wheels (rear 3/4 photo)
-    bm = bmesh.new()
-    for s in (1, -1):
-        v = [bm.verts.new((s * x, y, z)) for x, y, z in
-             ((0.995, 1.86, 0.62), (0.985, 2.10, 0.50), (0.975, 2.10, 0.14), (0.985, 1.86, 0.12))]
-        f = bm.faces.new(v if s > 0 else list(reversed(v)))
-    plates = new_obj(PREFIX + "RearPlates", bm, [M["carbon"]], col, smooth=False, recalc=False)
-    sol = plates.modifiers.new("thick", "SOLIDIFY")
-    sol.thickness = 0.012
     return head, tail
 
 
@@ -483,10 +560,11 @@ def build_wheel(col, M, name, wd, y, side):
 # Rear down nozzles are the exposed tubes at the tray corners in Tesla's Gravity image.
 NOZZLES = {
     # name: (exit centre, exhaust direction, exit radius, length)
-    "RearOuter_L": ((0.382, 2.180, 0.485), (0, 1, 0), 0.036, 0.22),
-    "RearInner_L": ((0.127, 2.180, 0.485), (0, 1, 0), 0.036, 0.22),
-    "RearInner_R": ((-0.127, 2.180, 0.485), (0, 1, 0), 0.036, 0.22),
-    "RearOuter_R": ((-0.382, 2.180, 0.485), (0, 1, 0), 0.036, 0.22),
+    # rear row: short thin-walled tubes along the top of the opening, just proud of the frame
+    "RearOuter_L": ((0.382, 2.218, 0.458), (0, 1, 0), 0.036, 0.25),
+    "RearInner_L": ((0.127, 2.218, 0.458), (0, 1, 0), 0.036, 0.25),
+    "RearInner_R": ((-0.127, 2.218, 0.458), (0, 1, 0), 0.036, 0.25),
+    "RearOuter_R": ((-0.382, 2.218, 0.458), (0, 1, 0), 0.036, 0.25),
     "DownFront_L": ((0.78, -0.94, 0.082), (0, 0, -1), 0.036, 0.16),
     "DownFront_R": ((-0.78, -0.94, 0.082), (0, 0, -1), 0.036, 0.16),
     "DownRear_L": ((0.72, 1.97, 0.12), (0, 0, -1), 0.034, 0.14),
@@ -495,7 +573,7 @@ NOZZLES = {
     "Side_R": ((-0.935, -1.95, 0.320), (-1, 0, 0), 0.036, 0.16),
 }
 FAN_X = (-0.382, -0.127, 0.127, 0.382)
-FAN_Z, FAN_R = 0.26, 0.095
+FAN_Z, FAN_R, FAN_Y = 0.272, 0.094, 2.000      # fan-jet centres sit in the bays below SHELF_Z
 
 
 def frame_from(direction):
@@ -507,9 +585,30 @@ def frame_from(direction):
     return Matrix((x, y, d)).transposed().to_4x4()
 
 
+def build_rear_tube(col, M, name, exit_c, r, length):
+    """Rear cold-gas outlet (Gravity photo): a short straight tube with a thin wall, a small
+    chamfer on the lip and a long dark bore — not a ring on a plate. Smooth (48 segments),
+    dark warm burnt metal. Built along +Z (= exhaust), origin = exit centre."""
+    bm = bmesh.new()
+    wall = 0.0055
+    ro = r + wall
+    prof = [(-length, ro), (-0.012, ro), (-0.003, ro - 0.0025), (0.0, r + 0.0015), (0.0, r),   # outside + chamfered lip
+            (-0.010, r), (-length * 0.85, r * 0.92), (-length * 0.9, 0.0)]                     # bore, dark
+    lathe(bm, prof, segs=48, axis="Z")
+    for f in bm.faces:
+        c = f.calc_center_median()
+        f.material_index = 1 if math.hypot(c.x, c.y) < r + 0.0005 and c.z < -0.004 else 0
+    ob = new_obj(PREFIX + "Nozzle_" + name, bm, [M["burnt"], M["black"]], col, sharp_angle=35)
+    ob.data.transform(frame_from((0, 1, 0)))
+    ob.matrix_world = Matrix.Translation(Vector(exit_c))
+    return ob
+
+
 def build_nozzle(col, M, name, exit_c, direction, r, length):
     """Convergent-divergent bell: titanium shell, dark throat, flange. Built along +Z
     (= exhaust direction) with the exit plane at z=0, then placed; origin = exit centre."""
+    if name.startswith("Rear"):
+        return build_rear_tube(col, M, name, exit_c, r, length)
     bm = bmesh.new()
     t = 0.008                                  # wall
     outer = [(-length, r * 0.62), (-length * 0.55, r * 0.70), (-length * 0.15, r * 1.02),
@@ -548,62 +647,108 @@ def build_nozzle(col, M, name, exit_c, direction, r, length):
 
 
 def build_rear(col, M):
-    """Contents of the open rear tray (Tesla Gravity photo): a black nozzle bar carrying the
-    4 small rear nozzles above 4 ducted fan-jets split by dividers, plus diffuser strakes
-    outboard. The fan-jets are the suction system: they pull air from under the floor and
-    blow it out aft as a jet (downforce + some thrust). Rotors spin about local Z (= aft)."""
+    """Rear mechanical opening (Tesla Gravity photo), built as one housed assembly instead of
+    parts hung on a plate:
+      * one thick frame with chamfered upper corners round the whole opening, standing proud
+        of the curved tail panel; its sides run down into a heavy bottom lip
+      * the lip sits in front of the fan bays and hides the bottom of the fans
+      * a horizontal shelf splits the nozzle row (top) from the 4 fan bays (below); the bay
+        dividers live INSIDE the frame, set back from its face
+      * fan-jets: bullet-shaped hub standing forward, twisted blades recessed behind it in the
+        shadow of a short shroud. Rotors spin about local Z (= aft).
+    The fan-jets are the suction system: they pull air from under the floor and blow it out
+    aft (downforce + some thrust)."""
     bm = bmesh.new()
-    box(bm, (0, 2.140, 0.485), (1.20, 0.08, 0.13))           # carbon shroud round the nozzle row
-    box(bm, (0, 2.100, TRAY_Z0 + 0.015), (1.02, 0.10, 0.03))   # fan-jet bay sill
-    for x in (-0.51, -0.255, 0.0, 0.255, 0.51):               # fan-jet dividers / side walls
-        box(bm, (x, 2.06, (TRAY_Z0 + TRAY_Z1) / 2), (0.014, 0.20, TRAY_Z1 - TRAY_Z0))
-    bar = new_obj(PREFIX + "NozzleBar", bm, [M["black"]], col, smooth=False)
+    frame_ring(bm, REAR_FRAME, REAR_OPEN, FRAME_BACK, FRAME_FRONT)
+    frame = new_obj(PREFIX + "RearFrame", bm, [M["black"]], col, smooth=False)
+    # heavy bottom lip: profile in (y, z), extruded across x, ends chamfered inward
+    bm = bmesh.new()
+    lip = [(2.06, 0.085), (2.235, 0.085), (2.235, 0.165), (2.205, 0.212), (2.06, 0.212)]
+    rows = []
+    for x, inset in ((-0.585, 0.03), (-0.55, 0.0), (0.55, 0.0), (0.585, 0.03)):
+        rows.append([bm.verts.new((x, y - inset, z)) for y, z in lip])
+    for a, b in zip(rows[:-1], rows[1:]):
+        n = len(a)
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new(list(reversed(rows[0])))
+    bm.faces.new(rows[-1])
+    lipo = new_obj(PREFIX + "RearLip", bm, [M["black"]], col, smooth=False)
+    # inside the opening: shelf under the nozzle row, bay dividers set back from the frame face
+    bm = bmesh.new()
+    inner_w = 2 * 0.60
+    box(bm, (0, (OPEN_BACK + 2.13) / 2, SHELF_Z), (inner_w, 2.13 - OPEN_BACK, 0.016))
+    for x in (-0.255, 0.0, 0.255):
+        box(bm, (x, (OPEN_BACK + 2.10) / 2, (0.12 + SHELF_Z) / 2), (0.014, 2.10 - OPEN_BACK, SHELF_Z - 0.12))
+    bays = new_obj(PREFIX + "RearBays", bm, [M["black"]], col, smooth=False)
+    # upper zone: a dark panel the outlet tubes come through, so only a short stub shows
+    bm = bmesh.new()
+    box(bm, (0, 2.135, (SHELF_Z + 0.525) / 2), (2 * 0.60, 0.024, 0.525 - SHELF_Z))
+    panel = new_obj(PREFIX + "RearOutletPanel", bm, [M["black"]], col, smooth=False)
     for name, (c, d, r, L) in NOZZLES.items():
         if name.startswith("Rear"):
             cb = bmesh.new()
-            lathe(cb, [(-0.2, r + 0.008), (0.2, r + 0.008)], segs=32, axis="Y",
-                  cx=c[0], cy=2.140, cz=c[2], close=True)
+            lathe(cb, [(-0.1, r + 0.0075), (0.1, r + 0.0075)], segs=48, axis="Y", cx=c[0], cy=2.135, cz=c[2], close=True)
             cut = new_obj("_tmp_cut", cb, [], col, smooth=False)
-            apply_bool(bar, cut)
+            apply_bool(panel, cut)
             bpy.data.objects.remove(cut, do_unlink=True)
     fans = []
     for i, x in enumerate(FAN_X):
-        # duct: exit lip flush with the bay, fan face recessed, centre body behind it
+        c = Vector((x, FAN_Y, FAN_Z))
+        place = Matrix.Translation(c) @ frame_from((0, 1, 0))      # local +Z = aft
+        # short shroud: the blades sit inside it, in shadow
         bm = bmesh.new()
-        lathe(bm, [(-0.16, FAN_R + 0.010), (0.0, FAN_R + 0.014), (0.0, FAN_R), (-0.16, FAN_R - 0.004),
-                   (-0.16, FAN_R + 0.010)], segs=40, axis="Z")
-        lathe(bm, [(-0.16, 0.0), (-0.16, FAN_R), (-0.165, FAN_R), (-0.165, 0.0)], segs=40,
-              axis="Z")                                        # back plate
-        for k in range(4):                                     # stator struts behind the fan
-            a = 2 * math.pi * (k + 0.5) / 4
-            box(bm, Matrix.Rotation(a, 4, "Z") @ Vector((0.0, FAN_R * 0.55, -0.135)),
-                (0.010, FAN_R * 0.9, 0.04), Matrix.Rotation(a, 4, "Z"))
-        shroud = new_obj(PREFIX + "FanDuct_%d" % i, bm, [M["black"]], col, sharp_angle=40)
-        shroud.data.transform(frame_from((0, 1, 0)))
-        shroud.matrix_world = Matrix.Translation((x, 2.10, FAN_Z))
-        # rotor: spinner cone + 9 pitched blades, recessed 6 cm, spins about local Z (= aft)
+        lathe(bm, [(0.0, FAN_R + 0.012), (0.105, FAN_R + 0.012), (0.105, FAN_R), (0.0, FAN_R),
+                   (0.0, FAN_R + 0.012)], segs=48, axis="Z")
+        lathe(bm, [(-0.02, 0.0), (-0.02, FAN_R + 0.012), (-0.03, FAN_R + 0.012), (-0.03, 0.0)],
+              segs=48, axis="Z")                                   # back plate
+        duct = new_obj(PREFIX + "FanDuct_%d" % i, bm, [M["black"]], col, sharp_angle=40)
+        duct.data.transform(place)
+        # rotor (origin = fan centre, local Z = aft): bullet hub well forward of the blades
         bm = bmesh.new()
-        lathe(bm, [(-0.11, 0.036), (-0.07, 0.035), (-0.04, 0.026), (-0.02, 0.012), (-0.012, 0.0)],
-              segs=20, axis="Z")
+        hub = [(0.0, 0.0), (0.0, 0.040), (0.055, 0.040), (0.090, 0.034), (0.115, 0.024),
+               (0.130, 0.012), (0.137, 0.0)]
+        lathe(bm, hub, segs=40, axis="Z")
+        hub_faces = set(bm.faces)
+        # 9 twisted blades: root pitch 52 deg, tip 26 deg, swept, closed thin solids
         for k in range(9):
-            a = 2 * math.pi * k / 9
-            rot = Matrix.Rotation(a, 4, "Z") @ Matrix.Rotation(math.radians(38), 4, "X")
-            box(bm, Matrix.Rotation(a, 4, "Z") @ Vector((0.0, 0.065, -0.085)),
-                (0.036, 0.060, 0.004), rot.to_3x3().to_4x4())
-        rotor = new_obj(PREFIX + "FanRotor_%d" % i, bm, [M["titanium"]], col, sharp_angle=40)
-        rotor.data.transform(frame_from((0, 1, 0)))
-        rotor.matrix_world = Matrix.Translation((x, 2.10, FAN_Z))
-        fans.append((shroud, rotor))
-    # diffuser strakes outboard of the tray + ramped floor between them
+            a0 = 2 * math.pi * k / 9
+            stations = []
+            for s in range(5):
+                u = s / 4
+                rr = lerp(0.040, FAN_R - 0.004, u)
+                a = a0 + 0.22 * u                      # sweep
+                pitch = math.radians(lerp(52, 26, u))
+                chord = lerp(0.030, 0.042, u)
+                rad = Vector((math.cos(a), math.sin(a), 0))
+                tan = Vector((-math.sin(a), math.cos(a), 0))
+                axial = Vector((0, 0, 1))
+                cdir = (tan * math.cos(pitch) + axial * math.sin(pitch)).normalized()
+                nrm = rad.cross(cdir).normalized()
+                p = rad * rr + axial * 0.030                  # blade disc 3 cm forward of the back plate
+                le, te = p + cdir * chord / 2, p - cdir * chord / 2
+                t = 0.0025
+                stations.append([bm.verts.new(v) for v in (le + nrm * t, te + nrm * t, te - nrm * t, le - nrm * t)])
+            for sa, sb in zip(stations[:-1], stations[1:]):
+                for q in range(4):
+                    w = (q + 1) % 4
+                    bm.faces.new((sa[q], sa[w], sb[w], sb[q]))
+            bm.faces.new(list(reversed(stations[0])))
+            bm.faces.new(stations[-1])
+        for f in bm.faces:
+            f.material_index = 0 if f in hub_faces else 1
+        rotor = new_obj(PREFIX + "FanRotor_%d" % i, bm, [M["graphite"], M["black"]], col, sharp_angle=40)
+        rotor.matrix_world = place
+        fans.append((duct, rotor))
+    # diffuser: a plain ramped floor under the lip (no vertical strakes hanging below)
     bm = bmesh.new()
-    for x in (-0.80, -0.70, 0.70, 0.80):
-        box(bm, (x, 1.95, 0.19), (0.012, 0.40, 0.12))
-    for sx in (1, -1):
-        v = [bm.verts.new((sx * a, b, c)) for a, b, c in
-             ((0.66, 1.50, 0.10), (0.84, 1.50, 0.10), (0.84, 2.15, 0.26), (0.66, 2.15, 0.26))]
-        bm.faces.new(v if sx > 0 else list(reversed(v)))
-    diff = new_obj(PREFIX + "Diffuser", bm, [M["carbon"]], col, smooth=False, recalc=False)
-    return bar, fans, diff
+    v = [bm.verts.new(p) for p in ((-0.62, 1.50, 0.098), (0.62, 1.50, 0.098), (0.62, 2.07, 0.086), (-0.62, 2.07, 0.086))]
+    bm.faces.new(v)
+    for z in (0.100, 0.112):                                      # two thin horizontal louvres under the lip
+        box(bm, (0, 2.20, z), (1.10, 0.05, 0.006))
+    diff = new_obj(PREFIX + "Diffuser", bm, [M["carbon"]], col, smooth=False)
+    return frame, fans, diff
 
 
 def build_underbody(col, M):
@@ -675,22 +820,25 @@ def build_wing(col, M):
 
 
 def build_cockpit(col, M):
-    """Single seat (driver on the left = +X), carbon tub, low dash under the windscreen with
-    two driver displays + a centre display, yoke on its own column object (steers about its
-    local Y = column axis). Laid out round EYE: windscreen ~1 m ahead, yoke 0.55 m ahead."""
+    """Two seats (driver on the left = +X, passenger mirrored), carbon tub, low dash under the
+    windscreen with two driver displays + a centre display, yoke on its own column object
+    (steers about its local Y = column axis). Laid out round EYE: windscreen ~1 m ahead, yoke
+    0.55 m ahead. The centre console stays at cushion height so the wolf can lie across both
+    seats (reclining pose, one paw on the yoke)."""
     seat_x = SEAT_X
     c = COCKPIT
     bm = bmesh.new()
     box(bm, (0, (c["y0"] + c["y1"]) / 2, c["z0"] - 0.02), (2 * c["x"] - 0.02, c["y1"] - c["y0"], 0.04))   # tub floor
     box(bm, (0, c["y1"] - 0.02, 0.62), (2 * c["x"] - 0.02, 0.04, 0.80))     # rear bulkhead
-    box(bm, (-0.06, 0.10, 0.32), (0.18, 1.20, 0.20))                       # centre console
+    box(bm, (0, 0.10, 0.27), (0.12, 1.20, 0.10))                           # low centre console
     tub = new_obj(PREFIX + "Tub", bm, [M["carbon"]], col, smooth=False)
     bm = bmesh.new()
-    box(bm, (seat_x, 0.48, 0.27), (0.46, 0.46, 0.09))        # cushion
     back = Matrix.Rotation(math.radians(-25), 4, "X")        # top leans back (+Y)
-    box(bm, (seat_x, 0.74, 0.55), (0.46, 0.08, 0.60), back)  # reclined back
-    for s in (1, -1):                                        # side bolsters
-        box(bm, (seat_x + s * 0.22, 0.55, 0.38), (0.05, 0.50, 0.20))
+    for sx in (seat_x, -seat_x):
+        box(bm, (sx, 0.48, 0.27), (0.46, 0.46, 0.09))        # cushion
+        box(bm, (sx, 0.74, 0.55), (0.46, 0.08, 0.60), back)  # reclined back
+        for s in (1, -1):                                    # low side bolsters (the wolf lies across them)
+            box(bm, (sx + s * 0.22, 0.55, 0.34), (0.05, 0.50, 0.12))
     seat = new_obj(PREFIX + "Seat", bm, [M["interior"]], col, smooth=False)
     bm = bmesh.new()
     box(bm, (0, c["y0"] + 0.12, 0.61), (2 * c["x"] - 0.04, 0.26, 0.18))   # dash under the windscreen

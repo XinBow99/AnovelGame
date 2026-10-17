@@ -37,7 +37,9 @@ namespace DUST.Vehicles
 
         [Header("Powertrain (half-scale)")]
         public float maxPowerW = 88000f;             // 實車約 1 MW ×1/8×√0.5
-        public float motorPeakTorque = 88f;          // N·m（半尺寸），× 齒比 ÷ 輪半徑 = 輪上推力 ~3.2 kN（1.5 g，起步受抓地力限制）
+        // N·m（半尺寸），× 齒比 ÷ 輪半徑 = 輪上推力 ~5.1 kN（2.5 g）：開吸地風扇時輪胎抓得住 >2 g，
+        // 馬達不能先卡住（目標：加推進器 0-60 mph ≈ 0.81 s 實車等效）
+        public float motorPeakTorque = 140f;
         public float gearRatio = 6f;
         public float motorMaxRpm = 30000f;
         public AnimationCurve torqueCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.85f, 1f), new Keyframe(1f, 0f));   // x = 馬達轉速 / 最高轉速
@@ -55,7 +57,9 @@ namespace DUST.Vehicles
         public float compressionDamping = 0.35f;     // 阻尼比
         public float reboundDamping = 0.6f;
         public float antiRoll = 0.6f;                // × 彈簧剛性
-        public float bumpStopFactor = 6f;            // 壓到底（2.5 × sag）之後的硬度倍數
+        public float bumpStopFactor = 20f;           // 壓過 bumpStart × sag 之後的額外硬度倍數（漸進式：吸地 + 流場 + 尾翼合計 ~2.8 倍車重時車底才不會碰地，實測）
+        public float bumpStart = 1.25f;
+        public float bumpReboundSpeed = 1f;          // m/s：懸吊一步最多把車身往上推多快（擋得住落地衝擊、但不會彈飛）
 
         [Header("Steering")]
         public float maxSteerDeg = 30f;
@@ -80,7 +84,11 @@ namespace DUST.Vehicles
         }
 
         public float SpeedKmh => !_rb ? 0f : _rb.isKinematic ? _syncedSpeedKmh : Vector3.Dot(_rb.linearVelocity, transform.forward) * 3.6f;
-        public string ControlsHint => "[F] 下車  [W] 油門  [S] 煞車 / 倒車  [A/D] 轉向  [Space] 煞車  [R] 翻正  [C] 視角";
+        public string ControlsHint => _thrusters
+            ? "[F] 下車  [W/S] 油門 / 煞車·倒車  [A/D] 轉向  [Space] 煞車  [X] 空力模式  [G] 吸地風扇  [Shift] 推進  [E] 升力  [Q/R] 偏航  空中 [W/S] 俯仰 [A/D] 滾轉  [V] 飛行輔助  [Backspace] 翻正  [C] 視角"
+            : "[F] 下車  [W] 油門  [S] 煞車 / 倒車  [A/D] 轉向  [Space] 煞車  [Backspace] 翻正  [C] 視角";
+        DSTThrusterSystem _thrusters;
+        DSTRoadsterAero _aero;
         public string EnterHint => "[F] 上車";
 
         public bool CanExit(float maxExitSpeedKmh, out string reason)
@@ -91,13 +99,18 @@ namespace DUST.Vehicles
 
         // 給特效 / HUD / 測試
         public float Throttle => _rb && _rb.isKinematic ? (_netState.Value & 255) / 255f : _throttle;
-        public float Brake => _rb && _rb.isKinematic ? ((_netState.Value >> 8) & 255) / 255f : _brake;
+        public float Brake => _rb && _rb.isKinematic ? ((_netState.Value >> 8) & 255) / 255f : Mathf.Max(_reverse ? 0f : _brake, _hardBrake);
         public float SteerDeg => _steerDeg;
         public bool Grounded { get; private set; }
         public int WheelsOnGround { get; private set; }
         public float DrivePowerW { get; private set; }
         public float LongAccel { get; private set; }     // m/s²（車身前後方向）
         public float LatAccel { get; private set; }
+        /// <summary>車身比靜止時低多少（m）：賽道 / 高下壓力模式由 DSTRoadsterAero 設定</summary>
+        [System.NonSerialized] public float rideLower;
+        /// <summary>著地輪子的平均路面法線（沒著地 = 車身向上）：吸地風扇往這個面吸</summary>
+        public Vector3 GroundNormal { get; private set; } = Vector3.up;
+        public int WheelCount => _w != null ? _w.Length : 0;
         public bool Reversing => _reverse;
         public string DebugWheels
         {
@@ -158,6 +171,7 @@ namespace DUST.Vehicles
             if (centerOfMass) _rb.centerOfMass = transform.InverseTransformPoint(centerOfMass.position);
             _lastPosition = transform.position;
             if (yoke) _yokeRest = yoke.localRotation;
+            _thrusters = GetComponent<DSTThrusterSystem>();
             var tl = Find(transform, "RD_TailLamp");
             _tailLamp = tl ? tl.GetComponent<Renderer>() : null;
             BuildWheels();
@@ -207,7 +221,7 @@ namespace DUST.Vehicles
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) st += 1f;
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) st -= 1f;
                 if (kb.spaceKey.isPressed) hard = 1f;
-                reset = kb.rKey.wasPressedThisFrame;
+                reset = kb.backspaceKey.wasPressedThisFrame;     // R 給推進器偏航用
             }
             var gp = Gamepad.current;
             if (gp != null)
@@ -223,7 +237,7 @@ namespace DUST.Vehicles
             brk = Mathf.Max(0f, -Input.GetAxis("Vertical"));
             st = Input.GetAxis("Horizontal");
             hard = Input.GetKey(KeyCode.Space) ? 1f : 0f;
-            reset = Input.GetKeyDown(KeyCode.R);
+            reset = Input.GetKeyDown(KeyCode.Backspace);
 #endif
             SetDriveInput(thr, brk, st, hard);
             if (reset) ResetUpright();
@@ -287,7 +301,7 @@ namespace DUST.Vehicles
             {
                 var w = _w[i];
                 var s = w.spec;
-                Vector3 center = transform.TransformPoint(s.local);
+                Vector3 center = transform.TransformPoint(s.local + Vector3.up * rideLower);   // 懸吊上移 = 車身降低
                 float reach = 0.3f + s.radius + sag;                  // 從輪心上方 0.3 m 往下打
                 w.prevComp = w.comp;
                 w.contact = RayGround(center + up * 0.3f, -up, reach, out var hit);
@@ -300,13 +314,20 @@ namespace DUST.Vehicles
                 float compV = (w.comp - w.prevComp) / dt;              // > 0 = 正在壓縮
                 float damp = w.c * (compV > 0f ? compressionDamping : reboundDamping);
                 float n = w.k * w.comp + damp * compV;
-                float bump = w.comp - sag * 2.5f;
+                float bump = w.comp - sag * bumpStart;
                 if (bump > 0f) n += w.k * bumpStopFactor * bump;
-                n = Mathf.Max(0f, n);
 
                 // 防傾桿：同軸左右壓縮差
                 var other = Opposite(i);
                 if (other != null) n += (w.comp - other.comp) * w.k * antiRoll;
+
+                // 硬限位很硬（ω·dt > 1）：一個物理步就把落地速度整個反彈回去（實測 6 m/s 落地 → 6.5 m/s 彈起、跳 2 m）。
+                // 像橡膠限位塊：這一步最多只擋住這輪分到的質量往下的速度（接地點的實際速度，不用落後一步的壓縮差），
+                // 再多給 bumpReboundSpeed 的回彈 + 撐住自己那份重量。
+                Vector3 pv = _rb.GetPointVelocity(hit.point);
+                Vector3 groundV = hit.rigidbody ? hit.rigidbody.GetPointVelocity(hit.point) : Vector3.zero;
+                float closing = -Vector3.Dot(pv - groundV, up);       // > 0 = 車身這一點正往地面壓
+                n = Mathf.Min(n, w.load + w.load / g * Mathf.Max(closing + bumpReboundSpeed, 0f) / dt);
                 n = Mathf.Max(0f, n);
                 _rb.AddForceAtPosition(up * n, hit.point);
 
@@ -314,7 +335,6 @@ namespace DUST.Vehicles
                 Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, hit.normal).normalized;
                 if (s.front) fwd = Quaternion.AngleAxis(_steerDeg, hit.normal) * fwd;
                 Vector3 right = Vector3.Cross(hit.normal, fwd);
-                Vector3 pv = _rb.GetPointVelocity(hit.point);
                 float vLon = Vector3.Dot(pv, fwd), vLat = Vector3.Dot(pv, right);
                 float muN = tyreGrip * n;
 
@@ -341,6 +361,9 @@ namespace DUST.Vehicles
                 w.spin += vLon / s.radius * Mathf.Rad2Deg * dt;
             }
             Grounded = WheelsOnGround > 0;
+            Vector3 nsum = Vector3.zero;
+            foreach (var w in _w) if (w.contact) nsum += w.normal;
+            GroundNormal = nsum.sqrMagnitude > 1e-6f ? nsum.normalized : transform.up;
             // 離地的輪子：照最後的轉速慢慢停（落地時不會一下子停住）
             for (int i = 0; i < _w.Length; i++)
                 if (!_w[i].contact) _w[i].spin += vf / _w[i].spec.radius * Mathf.Rad2Deg * dt * 0.98f;
@@ -420,12 +443,13 @@ namespace DUST.Vehicles
                 // 輪心跟著懸吊上下（遠端沒有懸吊資料：放在靜止位置）
                 float lift = remote ? 0f : (w.contact ? w.comp - sag : -sag);
                 if (remote) w.spin += vf / w.spec.radius * Mathf.Rad2Deg * dt;
-                var pos = transform.TransformPoint(w.spec.local + Vector3.up * lift);
+                var pos = transform.TransformPoint(w.spec.local + Vector3.up * (lift + rideLower));
                 var rot = transform.rotation * (w.spec.front ? Quaternion.AngleAxis(_steerDeg, Vector3.up) : Quaternion.identity)
                           * Quaternion.AngleAxis(w.spin, Vector3.right) * w.offset;
                 w.t.SetPositionAndRotation(pos, rot);
             }
-            if (yoke) yoke.localRotation = _yokeRest * Quaternion.AngleAxis(-_steerDeg * yokeRatio, Vector3.up);
+            // 左轉（_steerDeg < 0）= 方向盤頂端往駕駛的左邊（-X）；繞本地 +Y 正轉是往右（實測頂端位置，以前符號反了）
+            if (yoke) yoke.localRotation = _yokeRest * Quaternion.AngleAxis(_steerDeg * yokeRatio, Vector3.up);
             // 煞車燈
             if (_tailLamp)
             {
@@ -454,7 +478,17 @@ namespace DUST.Vehicles
             if (!_controlled) return;
             float kmh = Mathf.Abs(SpeedKmh);
             string gear = _reverse ? "R" : kmh < 0.5f && _throttle < 0.05f ? "P" : "D";
-            DSTHud.TopPanel($"速度 {kmh:0} km/h　檔位 {gear}　輸出 {DrivePowerW / 1000f:0} kW　{LongAccel / 9.81f:+0.00;-0.00} G");
+            string gas = "";
+            if (_thrusters)
+            {
+                int bars = Mathf.RoundToInt(_thrusters.GasFraction * 10f);
+                gas = $"　氣瓶 {new string('█', bars)}{new string('░', 10 - bars)} {_thrusters.GasFraction * 100f:0}%"
+                    + (_thrusters.TotalThrust > 1f ? $"　推力 {_thrusters.TotalThrust / 1000f:0.0} kN" : _thrusters.CompressorOn ? "　補氣中" : "")
+                    + $"　輔助 {(_thrusters.Assist ? "開" : "關")}";
+            }
+            if (!_aero) _aero = GetComponent<DSTRoadsterAero>();
+            string aero = _aero ? "\n" + _aero.HudText : "";
+            DSTHud.TopPanel($"速度 {kmh:0} km/h　檔位 {gear}　輸出 {DrivePowerW / 1000f:0} kW　{LongAccel / 9.81f:+0.00;-0.00} G{gas}{aero}");
         }
     }
 }

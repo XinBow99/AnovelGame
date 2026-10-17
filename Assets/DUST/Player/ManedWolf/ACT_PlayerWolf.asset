@@ -6858,8 +6858,74 @@ MonoBehaviour:
       time: 0.9
     - name: land
       time: 1.3
-  idle: {fileID: 3570357112970549660, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
-  walk: {fileID: 3397900291519635203, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
-  run: {fileID: -6493457038465869616, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
-  sniff: {fileID: -7558004188377200172, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
-  alert: {fileID: 40191342020239134, guid: cb8da267945106549b88cea48e2f29eb, type: 3}
+  - name: PL_Roadster_Recline
+    clip: {fileID: 1014390269645042380, guid: be47ba67aeee01d48aa00cc91998998f, type: 3}
+    vehicle: 3
+    kind: 2
+    side: 3
+    door: 0
+    leavesDoorOpen: 0
+    weight: 1
+    clearance: 0.8
+    steerDeg: 0
+    description: "Roadster\uFF1A\u50CF\u81E5\u4F5B\u4E00\u6A23\u5074\u8EBA\u5728\u5169\u500B\u5EA7\u4F4D\u4E0A\uFF0C\u5DE6\u524D\u8173\u6490\u8457\u81C9\u9830\uFF0C\u53F3\u524D\u8173\u638C\u55AE\u624B\u6309\u5728\u65B9\u5411\u76E4\u4E2D\u592E\u958B\u8ECA"
+    startPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    startYaw: -87.86684
+    endPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    endYaw: -87.86684
+    doorAngle:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    events: []
+  - name: PL_Roadster_Recline_SteerLeft
+    clip: {fileID: 686792196645178332, guid: be47ba67aeee01d48aa00cc91998998f, type: 3}
+    vehicle: 3
+    kind: 3
+    side: 3
+    door: 0
+    leavesDoorOpen: 0
+    weight: 1
+    clearance: 0.8
+    steerDeg: 60
+    description: "\u53F3\u524D\u8173\u638C\u8CBC\u8457\u65B9\u5411\u76E4\u4E2D\u592E\u5F80\u5DE6\u8F49 60\xB0"
+    startPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    startYaw: -87.86684
+    endPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    endYaw: -87.86684
+    doorAngle:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    events: []
+  - name: PL_Roadster_Recline_SteerRight
+    clip: {fileID: 2801543829911789378, guid: be47ba67aeee01d48aa00cc91998998f, type: 3}
+    vehicle: 3
+    kind: 3
+    side: 3
+    door: 0
+    leavesDoorOpen: 0
+    weight: 1
+    clearance: 0.8
+    steerDeg: -60
+    description: "\u53F3\u524D\u8173\u638C\u8CBC\u8457\u65B9\u5411\u76E4\u4E2D\u592E\u5F80\u53F3\u8F49 60\xB0"
+    startPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    startYaw: -87.86684
+    endPos: {x: 0.00000004247862, y: 0.25499994, z: 0.14499995}
+    endYaw: -87.86684
+    doorAngle:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    events: []
+  idle: {fileID: 6408852880359252162, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
+  walk: {fileID: -796095453462332428, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
+  run: {fileID: -7116159092115809270, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
+  sniff: {fileID: -798614400674396377, guid: eb552d38a42706d41a865606e64b89d1, type: 3}
+  alert: {fileID: 4983396421836490469, guid: eb552d38a42706d41a865606e64b89d1, type: 3}

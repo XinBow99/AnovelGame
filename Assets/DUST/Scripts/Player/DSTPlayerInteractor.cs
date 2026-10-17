@@ -147,21 +147,49 @@ namespace DUST.Player
         }
 
         public static void CenterPrompt(string text) => Draw(new Rect(0, Screen.height * 0.5f + 40, Screen.width, 40), text);
-        public static void BottomHint(string text) => Draw(new Rect(0, Screen.height - 60, Screen.width, 40), text);
+        // 很長的按鍵提示（Roadster）會超出螢幕：自動換行，高度往上長
+        public static void BottomHint(string text)
+        {
+            var s = Style();
+            float w = Screen.width - 40f;
+            float h = Mathf.Max(40f, Measure(text, w));
+            Draw(new Rect(20, Screen.height - 20 - h, w, h), text, true);
+        }
 
-        // 上方中央的資訊條（深色底），例如 MeBike 的騎乘時間與費用
+        // 上方中央的資訊條（深色底），例如 MeBike 的騎乘時間與費用。
+        // 多行 / 很長的狀態（Roadster：速度 + 氣瓶 + 空力模式）：高度跟著行數長、寬度超過螢幕就換行
         public static void TopPanel(string text)
         {
             var s = Style();
-            float w = s.CalcSize(new GUIContent(text)).x + 40f;
-            var r = new Rect((Screen.width - w) * 0.5f, 54, w, 38);
+            float w = Mathf.Min(s.CalcSize(new GUIContent(text)).x + 40f, Screen.width - 40f);
+            float h = Mathf.Max(38f, Measure(text, w - 40f) + 14f);
+            var r = new Rect((Screen.width - w) * 0.5f, 54, w, h);
             var c = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, 0.5f);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.color = new Color(0.98f, 0.62f, 0.08f, 1f);
             GUI.DrawTexture(new Rect(r.x, r.yMax - 3, r.width, 3), Texture2D.whiteTexture);
             GUI.color = c;
+            Draw(new Rect(r.x + 20f, r.y, r.width - 40f, r.height), text, true);
+        }
+
+        static float Measure(string text, float width)
+        {
+            var s = Style();
+            bool wrap = s.wordWrap;
+            s.wordWrap = true;
+            float h = s.CalcHeight(new GUIContent(text), width);
+            s.wordWrap = wrap;
+            return h;
+        }
+
+        static void Draw(Rect r, string text, bool wrap)
+        {
+            var s = Style();
+            bool old = s.wordWrap;
+            s.wordWrap = wrap;
             Draw(r, text);
+            s.wordWrap = old;
         }
 
         static void Draw(Rect r, string text)
